@@ -126,6 +126,10 @@ export const CanvasStage = () => {
     updateDraft(pos.x, pos.y);
   };
 
+  if (dimensions.width === 0 || dimensions.height === 0) {
+      return <div ref={containerRef} className="flex-1 bg-gray-900 overflow-hidden h-full relative" />;
+  }
+
   return (
     <div ref={containerRef} className="flex-1 bg-gray-900 overflow-hidden h-full relative">
       <Stage

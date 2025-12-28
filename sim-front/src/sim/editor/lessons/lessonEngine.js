@@ -24,19 +24,6 @@ export const validateLesson = (lessonId, components, wires, simulationState) => 
       completed: passed // Simple all-or-nothing for now
   }));
 
-  // Special handling for L6 (Lamp) to check lit state specifically
-  if (lessonId === 'L6') {
-      // Find a lamp
-      // Check if its L is in livePhaseSet and N is in neutralSet
-      const lamps = components.filter(c => c.type === 'LAMP');
-      const isLit = lamps.some(l => 
-          simulationState.livePhaseSet.has(`${l.id}:L`) && 
-          simulationState.neutralSet.has(`${l.id}:N`)
-      );
-      passed = isLit;
-      checklist.forEach(i => i.completed = isLit);
-  }
-
   return { passed, checklist };
 };
 

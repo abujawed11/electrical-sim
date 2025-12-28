@@ -255,6 +255,23 @@ export const useEditorStore = create(
         get()._evaluate();
       },
 
+      clearAll: () => {
+          const { mode } = get();
+          set({
+              components: [],
+              wires: [],
+              draftWire: null,
+              selectedId: null,
+              selectedWireId: null,
+              hoveredTerminal: null,
+              // If guided, we might want to reset the current lesson checklist too
+              lessonStatus: mode === 'GUIDED' 
+                ? { passed: false, checklist: get().lessonStatus.checklist.map(c => ({...c, completed: false})) }
+                : { passed: false, checklist: [] }
+          });
+          get()._evaluate();
+      },
+
       setHoveredTerminal: (info) => {
         set({ hoveredTerminal: info });
       },

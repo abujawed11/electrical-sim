@@ -8,6 +8,13 @@ export const Toolbox = () => {
   const mode = useEditorStore((state) => state.mode);
   const setMode = useEditorStore((state) => state.setMode);
   const allowedParts = useEditorStore((state) => state.allowedParts);
+  const clearAll = useEditorStore((state) => state.clearAll);
+
+  const handleClear = () => {
+      if (window.confirm("Are you sure you want to clear the entire canvas? This action cannot be undone.")) {
+          clearAll();
+      }
+  };
 
   const availableTypes = Object.values(COMPONENT_TYPES).filter(type => {
       if (mode === 'SANDBOX') return true;
@@ -47,6 +54,13 @@ export const Toolbox = () => {
         })}
       </div>
       
+      <button
+        onClick={handleClear}
+        className="mt-4 w-full py-2 bg-red-900/80 hover:bg-red-800 text-red-100 rounded text-sm font-bold border border-red-700 transition-colors"
+      >
+        Clear Canvas
+      </button>
+
       <div className="mt-4 text-xs text-gray-500 border-t border-gray-700 pt-2">
         <p>Pan: Drag empty space</p>
         <p>Zoom: Mouse wheel</p>
