@@ -11,6 +11,14 @@ export const Switch = ({ id, type, x, y, isSelected, properties, onSelect, onDra
   const simulationState = useEditorStore((state) => state.simulationState);
 
   const isOn = properties.isOn;
+  const updateComponent = useEditorStore((state) => state.updateComponent);
+
+  const toggleSwitch = (e) => {
+      e.cancelBubble = true; // Prevent selecting component when toggling
+      updateComponent(id, {
+          properties: { ...properties, isOn: !isOn }
+      });
+  };
 
   return (
     <Group
@@ -48,24 +56,38 @@ export const Switch = ({ id, type, x, y, isSelected, properties, onSelect, onDra
         shadowOffset={{ x: 1, y: 1 }}
       />
 
-      {/* Rocker */}
-      <Rect
-        x={-8}
-        y={-10}
-        width={16}
-        height={20}
-        fill={isOn ? '#4B5563' : '#E5E7EB'}
-        stroke="#9CA3AF"
-        strokeWidth={1}
-        cornerRadius={2}
-      />
-      <Rect
-        x={-8}
-        y={isOn ? -2 : -10}
-        width={16}
-        height={10}
-        fill="#1F2937"
-        cornerRadius={2}
+      {/* Rocker - Clickable */}
+      <Group onClick={toggleSwitch} onTap={toggleSwitch}>
+          <Rect
+            x={-8}
+            y={-10}
+            width={16}
+            height={20}
+            fill={isOn ? '#4B5563' : '#E5E7EB'}
+            stroke="#9CA3AF"
+            strokeWidth={1}
+            cornerRadius={2}
+          />
+          <Rect
+            x={-8}
+            y={isOn ? -2 : -10}
+            width={16}
+            height={10}
+            fill="#1F2937"
+            cornerRadius={2}
+            listening={false}
+          />
+      </Group>
+
+      {/* Label */}
+      <Text
+        text={properties.label}
+        fontSize={10}
+        y={22}
+        width={40}
+        offsetX={20}
+        align="center"
+        fill="#374151"
         listening={false}
       />
 

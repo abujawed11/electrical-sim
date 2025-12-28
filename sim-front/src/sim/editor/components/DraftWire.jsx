@@ -14,11 +14,19 @@ export const DraftWire = () => {
 
   const start = getTerminalPos(fromComp, draftWire.from.terminalId);
   const end = draftWire.toPos;
+  
+  // Construct points array: Start -> [Waypoints] -> MousePos
+  const waypoints = draftWire.waypoints || [];
+  const points = [
+      start.x, start.y,
+      ...waypoints.flatMap(p => [p.x, p.y]),
+      end.x, end.y
+  ];
 
   return (
     <Group>
       <Line
-        points={[start.x, start.y, end.x, end.y]}
+        points={points}
         stroke="#60A5FA" // Light blue
         strokeWidth={2}
         dash={[10, 5]}
@@ -38,6 +46,17 @@ export const DraftWire = () => {
         strokeWidth={2}
         listening={false}
       />
+      
+      {/* Waypoint Dots */}
+      {waypoints.map((p, i) => (
+         <Line
+            key={i}
+            points={[p.x - 2, p.y - 2, p.x + 2, p.y + 2]} // Small X or just simple marker
+            stroke="#3B82F6"
+            strokeWidth={4}
+            lineCap="round"
+         />
+      ))}
     </Group>
   );
 };

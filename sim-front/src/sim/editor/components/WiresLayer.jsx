@@ -23,6 +23,14 @@ export const WiresLayer = () => {
         const start = getTerminalPos(fromComp, wire.from.terminalId);
         const end = getTerminalPos(toComp, wire.to.terminalId);
         const isSelected = selectedWireId === wire.id;
+        
+        // Construct points: Start -> Waypoints -> End
+        const waypoints = wire.waypoints || [];
+        const points = [
+            start.x, start.y,
+            ...waypoints.flatMap(p => [p.x, p.y]),
+            end.x, end.y
+        ];
 
         // Determine Wire Kind (Phase/Neutral/Earth) to pick color
         // And check if energized
@@ -38,7 +46,7 @@ export const WiresLayer = () => {
 
            if (term.kind === TERMINAL_KINDS.PHASE) {
               isEnergized = simulationState.livePhaseSet.has(fromIdStr) && simulationState.livePhaseSet.has(toIdStr);
-              strokeColor = isEnergized ? '#B91C1C' : '#7F1D1D'; // Bright Red vs Dark Red (or Gray if we want completely dead look)
+              strokeColor = isEnergized ? '#B91C1C' : '#7F1D1D'; // Bright Red vs Dark Red
               if (!isEnergized) strokeColor = '#4B5563'; // Dim gray if dead
            } else if (term.kind === TERMINAL_KINDS.NEUTRAL) {
               isEnergized = simulationState.neutralSet.has(fromIdStr) && simulationState.neutralSet.has(toIdStr);
@@ -52,13 +60,13 @@ export const WiresLayer = () => {
         }
 
         // Selected override
-        if (isSelected) strokeColor = '#60A5FA'; // Light blue highlight? Or maybe Orange to stand out
+        if (isSelected) strokeColor = '#60A5FA'; 
 
         return (
           <Group key={wire.id}>
             {/* Hit area (thick invisible line) */}
             <Line
-              points={[start.x, start.y, end.x, end.y]}
+              points={points}
               stroke="transparent"
               strokeWidth={15}
               onMouseEnter={(e) => {
@@ -80,7 +88,7 @@ export const WiresLayer = () => {
             />
             {/* Visible Wire */}
             <Line
-              points={[start.x, start.y, end.x, end.y]}
+              points={points}
               stroke={strokeColor} 
               strokeWidth={isSelected ? 4 : 2}
               lineCap="round"

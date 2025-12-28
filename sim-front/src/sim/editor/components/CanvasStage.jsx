@@ -18,7 +18,9 @@ export const CanvasStage = () => {
     selectedId,
     updateDraft,
     cancelWire,
-    selectWire
+    selectWire,
+    addDraftWaypoint,
+    draftWire
   } = useEditorStore();
 
   React.useEffect(() => {
@@ -94,11 +96,20 @@ export const CanvasStage = () => {
   };
 
   const handleStageClick = (e) => {
-    // Deselect if clicked on empty stage
+    // If clicked on empty stage
     if (e.target === e.target.getStage()) {
-      selectComponent(null);
-      selectWire(null);
-      cancelWire(); // Cancel draft if any
+      if (draftWire) {
+        // Add waypoint if drafting
+        const stage = stageRef.current;
+        const pointer = stage.getPointerPosition();
+        const transform = stage.getAbsoluteTransform().copy().invert();
+        const pos = transform.point(pointer);
+        addDraftWaypoint(pos.x, pos.y);
+      } else {
+        // Else deselect
+        selectComponent(null);
+        selectWire(null);
+      }
     }
   };
 
