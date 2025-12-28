@@ -30,10 +30,10 @@ export const PART_REGISTRY = {
       label: 'METER',
     },
     terminals: [
-      { id: 'IN_L', kind: TERMINAL_KINDS.PHASE, relX: -20, relY: 42, label: 'L-IN' },
-      { id: 'IN_N', kind: TERMINAL_KINDS.NEUTRAL, relX: -10, relY: 42, label: 'N-IN' },
-      { id: 'OUT_N', kind: TERMINAL_KINDS.NEUTRAL, relX: 10, relY: 42, label: 'N-OUT' },
-      { id: 'OUT_L', kind: TERMINAL_KINDS.PHASE, relX: 20, relY: 42, label: 'L-OUT' },
+      { id: 'IN_L', kind: TERMINAL_KINDS.PHASE, relX: -20, relY: 42, label: 'L-I' },
+      { id: 'IN_N', kind: TERMINAL_KINDS.NEUTRAL, relX: -10, relY: 42, label: 'N-I' },
+      { id: 'OUT_N', kind: TERMINAL_KINDS.NEUTRAL, relX: 10, relY: 42, label: 'N-O' },
+      { id: 'OUT_L', kind: TERMINAL_KINDS.PHASE, relX: 20, relY: 42, label: 'L-O' },
     ],
   },
   [COMPONENT_TYPES.NEUTRAL_BAR]: {

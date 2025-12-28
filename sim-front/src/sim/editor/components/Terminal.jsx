@@ -1,5 +1,5 @@
 import React from 'react';
-import { Circle, Group } from 'react-konva';
+import { Circle, Group, Text, Rect } from 'react-konva';
 import { useEditorStore } from '../store';
 
 export const Terminal = ({ componentId, terminal, isHovered, isEnergized, onMouseEnter, onMouseLeave }) => {
@@ -50,6 +50,29 @@ export const Terminal = ({ componentId, terminal, isHovered, isEnergized, onMous
     }
   };
 
+  // Smart Label Positioning: Avoid overlaps by considering terminal alignment
+  const dist = 18;
+  let lx = 0;
+  let ly = 0;
+
+  if (terminal.relX === 0 && terminal.relY === 0) {
+      ly = -dist; // Default above
+  } else {
+      const absX = Math.abs(terminal.relX);
+      const absY = Math.abs(terminal.relY);
+
+      // Determine if terminal is primarily on top/bottom or left/right
+      if (absY > absX) {
+          // Vertical side (top or bottom)
+          ly = terminal.relY > 0 ? dist : -dist;
+          lx = terminal.relX * 0.3; // Slight horizontal offset based on X position
+      } else {
+          // Horizontal side (left or right)
+          lx = terminal.relX > 0 ? dist : -dist;
+          ly = terminal.relY * 0.3; // Slight vertical offset based on Y position
+      }
+  }
+
   return (
     <Group
       x={terminal.relX}
@@ -69,6 +92,67 @@ export const Terminal = ({ componentId, terminal, isHovered, isEnergized, onMous
         stroke={strokeColor}
         strokeWidth={strokeWidth}
       />
+
+      {/* Terminal Label with Background */}
+      {terminal.label && (() => {
+        // Color-code labels based on terminal kind
+        let bgColor = 'rgba(50, 50, 50, 0.9)';
+        let textColor = '#FFF';
+        let borderColor = 'rgba(255, 255, 255, 0.4)';
+
+        switch(terminal.kind) {
+          case 'PHASE':
+            bgColor = 'rgba(239, 68, 68, 0.9)'; // Red
+            textColor = '#FFF';
+            borderColor = 'rgba(255, 150, 150, 0.6)';
+            break;
+          case 'NEUTRAL':
+            bgColor = 'rgba(59, 130, 246, 0.9)'; // Blue
+            textColor = '#FFF';
+            borderColor = 'rgba(150, 200, 255, 0.6)';
+            break;
+          case 'EARTH':
+            bgColor = 'rgba(34, 197, 94, 0.9)'; // Green
+            textColor = '#FFF';
+            borderColor = 'rgba(150, 255, 150, 0.6)';
+            break;
+          default:
+            bgColor = 'rgba(245, 158, 11, 0.9)'; // Amber
+            textColor = '#000';
+            borderColor = 'rgba(255, 200, 100, 0.6)';
+        }
+
+        return (
+          <Group x={lx} y={ly} offsetX={18} offsetY={8}>
+            {/* Background Rectangle */}
+            <Rect
+              width={36}
+              height={16}
+              fill={bgColor}
+              cornerRadius={4}
+              stroke={borderColor}
+              strokeWidth={1.5}
+              shadowColor="rgba(0, 0, 0, 0.5)"
+              shadowBlur={4}
+              shadowOffsetY={2}
+              listening={false}
+            />
+            {/* Label Text */}
+            <Text
+              text={terminal.label}
+              fontSize={11}
+              fontStyle="bold"
+              fontFamily="Arial, sans-serif"
+              fill={textColor}
+              align="center"
+              verticalAlign="middle"
+              width={36}
+              height={16}
+              listening={false}
+            />
+          </Group>
+        );
+      })()}
     </Group>
   );
 };
