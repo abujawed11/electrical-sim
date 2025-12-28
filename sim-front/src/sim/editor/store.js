@@ -3,6 +3,7 @@ import { persist, createJSONStorage } from 'zustand/middleware';
 import { nanoid } from 'nanoid';
 import { PART_REGISTRY } from './parts/partRegistry';
 import { evaluateNetwork } from './logic/evaluateNetwork';
+import { evaluateFaults } from './logic/evaluateFaults';
 import { validateLesson, getLesson } from './lessons/lessonEngine';
 import { LESSON_PATH } from './lessons/lessonPathSinglePhase';
 
@@ -11,6 +12,8 @@ const DEFAULT_SIM_STATE = {
   neutralSet: new Set(),
   earthSet: new Set(),
   socketStates: {},
+  protectedPhaseSet: new Set(),
+  protectedNeutralSet: new Set(),
 };
 
 export const useEditorStore = create(
@@ -23,12 +26,13 @@ export const useEditorStore = create(
       hoveredTerminal: null,
       draftWire: null,
       simulationState: DEFAULT_SIM_STATE,
+      messages: [], // { id, text, type: 'error'|'info' }
       
       // Guided Mode State
-      mode: 'SANDBOX', // 'SANDBOX' | 'GUIDED'
+      mode: 'SANDBOX', 
       activeLessonId: 'L0',
       lessonStatus: { passed: false, checklist: [] },
-      allowedParts: null, // null = all allowed
+      allowedParts: null, 
 
       stage: {
         scale: 1,
@@ -38,15 +42,65 @@ export const useEditorStore = create(
 
       // --- Helper to trigger evaluation ---
       _evaluate: () => {
-        const { components, wires, mode, activeLessonId } = get();
-        const newState = evaluateNetwork(components, wires);
+        let { components, wires, mode, activeLessonId } = get();
         
-        let lessonStatus = { passed: false, checklist: [] };
-        if (mode === 'GUIDED') {
-            lessonStatus = validateLesson(activeLessonId, components, wires, newState);
+        // 1. Compute Network State (Energization)
+        let simState = evaluateNetwork(components, wires);
+        
+        // 2. Check Faults & Trip Devices
+        const trips = evaluateFaults(components, wires, simState);
+        
+        if (trips.length > 0) {
+            // Apply trips
+            const newComponents = components.map(c => {
+                const trip = trips.find(t => t.id === c.id);
+                if (trip) {
+                    return { ...c, properties: { ...c.properties, ...trip.updates } };
+                }
+                return c;
+            });
+
+            // Add messages
+            const newMessages = trips.map(t => ({ id: nanoid(), text: t.msg, type: 'error' }));
+            
+            set(state => ({
+                components: newComponents,
+                messages: [...state.messages, ...newMessages]
+            }));
+
+            // Re-evaluate network since topology changed (switches opened)
+            simState = evaluateNetwork(newComponents, wires);
+            // We update local var for lesson validation below
+            components = newComponents;
         }
 
-        set({ simulationState: newState, lessonStatus });
+        let lessonStatus = { passed: false, checklist: [] };
+        if (mode === 'GUIDED') {
+            lessonStatus = validateLesson(activeLessonId, components, wires, simState);
+        }
+
+        set({ simulationState: simState, lessonStatus });
+      },
+
+      addMessage: (text, type = 'info') => {
+          set(state => ({ messages: [...state.messages, { id: nanoid(), text, type }] }));
+      },
+
+      dismissMessage: (id) => {
+          set(state => ({ messages: state.messages.filter(m => m.id !== id) }));
+      },
+      
+      resetAllTrips: () => {
+          set(state => ({
+              components: state.components.map(c => {
+                  if (c.properties.isTripped) {
+                      return { ...c, properties: { ...c.properties, isTripped: false, isOn: true } };
+                  }
+                  return c;
+              }),
+              messages: [] 
+          }));
+          get()._evaluate();
       },
 
       setMode: (mode) => {
@@ -144,6 +198,23 @@ export const useEditorStore = create(
         }));
       },
 
+      clearAll: () => {
+          const { mode } = get();
+          set({
+              components: [],
+              wires: [],
+              draftWire: null,
+              selectedId: null,
+              selectedWireId: null,
+              hoveredTerminal: null,
+              lessonStatus: mode === 'GUIDED' 
+                ? { passed: false, checklist: get().lessonStatus.checklist.map(c => ({...c, completed: false})) }
+                : { passed: false, checklist: [] },
+              messages: []
+          });
+          get()._evaluate();
+      },
+
       // --- Wire Actions ---
 
       startWire: (compId, terminalId) => {
@@ -207,8 +278,10 @@ export const useEditorStore = create(
 
         if (!fromTerm || !toTerm) { set({ draftWire: null }); return; }
 
+        // Step-2 validation: Block cross-kind wiring (Step-6 relies on Fault Parts to bridge kinds)
         if (fromTerm.kind !== toTerm.kind) {
           console.warn(`Mismatch: ${fromTerm.kind} vs ${toTerm.kind}`);
+          get().addMessage(`Cannot connect ${fromTerm.kind} to ${toTerm.kind}. Use a Fault Part if testing faults.`, 'error');
           set({ draftWire: null });
           return;
         }
@@ -255,30 +328,13 @@ export const useEditorStore = create(
         get()._evaluate();
       },
 
-      clearAll: () => {
-          const { mode } = get();
-          set({
-              components: [],
-              wires: [],
-              draftWire: null,
-              selectedId: null,
-              selectedWireId: null,
-              hoveredTerminal: null,
-              // If guided, we might want to reset the current lesson checklist too
-              lessonStatus: mode === 'GUIDED' 
-                ? { passed: false, checklist: get().lessonStatus.checklist.map(c => ({...c, completed: false})) }
-                : { passed: false, checklist: [] }
-          });
-          get()._evaluate();
-      },
-
       setHoveredTerminal: (info) => {
         set({ hoveredTerminal: info });
       },
 
     }),
     {
-      name: 'electrical-sim-storage', // unique name
+      name: 'electrical-sim-storage', 
       storage: createJSONStorage(() => localStorage),
       partialize: (state) => ({
           components: state.components,
@@ -286,13 +342,9 @@ export const useEditorStore = create(
           mode: state.mode,
           activeLessonId: state.activeLessonId,
           stage: state.stage,
-          // We do NOT save simulationState (it's sets, hard to JSON)
-          // We do NOT save lessonStatus (recomputed)
-          // We do NOT save draft/selections
       }),
       onRehydrateStorage: () => (state) => {
           if (state) {
-              // Re-evaluate network after loading
               state._evaluate();
           }
       },

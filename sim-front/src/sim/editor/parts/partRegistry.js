@@ -10,6 +10,9 @@ import { Switch } from './Switch';
 import { Lamp } from './Lamp';
 import { RCCB } from './RCCB';
 import { RCBO } from './RCBO';
+import { FaultShortLN } from './FaultShortLN';
+import { FaultLeakLE } from './FaultLeakLE';
+import { HumanBody } from './HumanBody';
 
 export const PART_REGISTRY = {
   [COMPONENT_TYPES.SUPPLY]: {
@@ -84,6 +87,7 @@ export const PART_REGISTRY = {
       label: 'MCB-1',
       rating: '16A',
       isOn: true,
+      isTripped: false,
     },
     terminals: [
       { id: 'LIN', kind: TERMINAL_KINDS.PHASE, relX: 0, relY: -28, label: 'IN' },
@@ -156,6 +160,33 @@ export const PART_REGISTRY = {
       { id: 'E', kind: TERMINAL_KINDS.EARTH, relX: 0, relY: -18, label: 'E' },
       { id: 'N', kind: TERMINAL_KINDS.NEUTRAL, relX: -15, relY: 15, label: 'N' },
       { id: 'L', kind: TERMINAL_KINDS.PHASE, relX: 15, relY: 15, label: 'L' },
+    ],
+  },
+  [COMPONENT_TYPES.FAULT_SHORT_LN]: {
+    name: 'Fault: Short L-N',
+    component: FaultShortLN,
+    defaultProperties: { label: 'SHORT' },
+    terminals: [
+      { id: 'A', kind: TERMINAL_KINDS.PHASE, relX: -15, relY: 0, label: 'L' },
+      { id: 'B', kind: TERMINAL_KINDS.NEUTRAL, relX: 15, relY: 0, label: 'N' },
+    ],
+  },
+  [COMPONENT_TYPES.FAULT_LEAK_LE]: {
+    name: 'Fault: Leak L-E',
+    component: FaultLeakLE,
+    defaultProperties: { label: 'LEAK' },
+    terminals: [
+      { id: 'A', kind: TERMINAL_KINDS.PHASE, relX: -15, relY: 0, label: 'L' },
+      { id: 'B', kind: TERMINAL_KINDS.EARTH, relX: 15, relY: 0, label: 'E' },
+    ],
+  },
+  [COMPONENT_TYPES.HUMAN_BODY]: {
+    name: 'Human Body (Shock)',
+    component: HumanBody,
+    defaultProperties: { label: 'HUMAN', resistanceOhms: 1000 },
+    terminals: [
+      { id: 'HAND', kind: TERMINAL_KINDS.PHASE, relX: -20, relY: -10, label: 'HAND' },
+      { id: 'FEET', kind: TERMINAL_KINDS.EARTH, relX: 20, relY: 30, label: 'FEET' },
     ],
   },
 };

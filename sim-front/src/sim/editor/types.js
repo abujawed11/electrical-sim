@@ -10,6 +10,9 @@ export const COMPONENT_TYPES = {
   LAMP: 'LAMP',
   RCCB: 'RCCB',
   RCBO: 'RCBO',
+  FAULT_SHORT_LN: 'FAULT_SHORT_LN',
+  FAULT_LEAK_LE: 'FAULT_LEAK_LE',
+  HUMAN_BODY: 'HUMAN_BODY',
 };
 
 export const TERMINAL_KINDS = {

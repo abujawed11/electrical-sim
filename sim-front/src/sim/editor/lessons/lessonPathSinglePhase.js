@@ -5,7 +5,7 @@ export const LESSON_PATH = [
     id: 'L0',
     title: 'Orientation',
     description: 'Welcome to the Electrical Wiring Simulator. Familiarize yourself with the interface. Blue wires are Neutral, Red are Phase, Green are Earth.',
-    allowedParts: Object.values(COMPONENT_TYPES), // All allowed
+    allowedParts: Object.values(COMPONENT_TYPES), 
     checklist: [
       { id: 'start', label: 'Explore the interface' },
     ],
@@ -83,19 +83,14 @@ export const LESSON_PATH = [
     validate: (components, wires) => {
         const rccb = components.find(c => c.type === COMPONENT_TYPES.RCCB);
         if (!rccb || !rccb.properties.isOn) return false;
-
-        // Check Phase connection (from any MCB to RCCB L_IN)
         const phaseOk = wires.some(w => 
             (w.to.compId === rccb.id && w.to.terminalId === 'L_IN' && components.find(c => c.id === w.from.compId)?.type === COMPONENT_TYPES.MCB) ||
             (w.from.compId === rccb.id && w.from.terminalId === 'L_IN' && components.find(c => c.id === w.to.compId)?.type === COMPONENT_TYPES.MCB)
         );
-
-        // Check Neutral connection (from Meter to RCCB N_IN)
         const neutralOk = wires.some(w => 
             (w.to.compId === rccb.id && w.to.terminalId === 'N_IN' && components.find(c => c.id === w.from.compId)?.type === COMPONENT_TYPES.METER) ||
             (w.from.compId === rccb.id && w.from.terminalId === 'N_IN' && components.find(c => c.id === w.to.compId)?.type === COMPONENT_TYPES.METER)
         );
-
         return phaseOk && neutralOk;
     }
   },
@@ -112,26 +107,21 @@ export const LESSON_PATH = [
     validate: (components, wires) => {
        const rccb = components.find(c => c.type === COMPONENT_TYPES.RCCB);
        if (!rccb) return false;
-       
        const busFeed = wires.some(w => 
            (w.from.compId === rccb.id && w.from.terminalId === 'L_OUT' && components.find(c => c.id === w.to.compId)?.type === COMPONENT_TYPES.BUSBAR) ||
            (w.to.compId === rccb.id && w.to.terminalId === 'L_OUT' && components.find(c => c.id === w.from.compId)?.type === COMPONENT_TYPES.BUSBAR)
        );
-       
        const neutFeed = wires.some(w => 
            (w.from.compId === rccb.id && w.from.terminalId === 'N_OUT' && components.find(c => c.id === w.to.compId)?.type === COMPONENT_TYPES.NEUTRAL_BAR) ||
            (w.to.compId === rccb.id && w.to.terminalId === 'N_OUT' && components.find(c => c.id === w.from.compId)?.type === COMPONENT_TYPES.NEUTRAL_BAR)
        );
-
        const earthFeed = wires.some(w => 
             components.find(c => c.id === w.from.compId)?.type === COMPONENT_TYPES.SUPPLY && 
             components.find(c => c.id === w.to.compId)?.type === COMPONENT_TYPES.EARTH_BAR
-            // direction check simplified
        ) || wires.some(w => 
             components.find(c => c.id === w.to.compId)?.type === COMPONENT_TYPES.SUPPLY && 
             components.find(c => c.id === w.from.compId)?.type === COMPONENT_TYPES.EARTH_BAR
        );
-
        return busFeed && neutFeed && earthFeed;
     }
   },
@@ -145,12 +135,8 @@ export const LESSON_PATH = [
       { id: 'conn_c1', label: 'Busbar OUT → Circuit MCB IN' },
     ],
     validate: (components, wires) => {
-        // Find MCBs that are NOT the main one (connected to Meter)
-        // Hard to distinguish without tracing. 
-        // Or just check if ANY MCB is connected to Busbar.
         const busbar = components.find(c => c.type === COMPONENT_TYPES.BUSBAR);
         if (!busbar) return false;
-
         const connectedMCB = components.find(c => c.type === COMPONENT_TYPES.MCB && 
             wires.some(w => 
                 (w.from.compId === busbar.id && w.to.compId === c.id) ||
@@ -177,7 +163,47 @@ export const LESSON_PATH = [
         return components.some(c => 
             c.type === COMPONENT_TYPES.SOCKET && 
             simState.socketStates[c.id]?.status === 'LIVE_OK' &&
-            !simState.socketStates[c.id]?.warning // Check for no warning
+            !simState.socketStates[c.id]?.warning 
+        );
+    }
+  },
+  {
+    id: 'L8',
+    title: 'Short Circuit Fault',
+    description: 'Learn how MCBs protect against Short Circuits. Add a "Short L-N" fault component downstream of the Circuit MCB.',
+    allowedParts: Object.values(COMPONENT_TYPES),
+    checklist: [
+        { id: 'add_short', label: 'Place "Short L-N" Fault' },
+        { id: 'conn_fault', label: 'Connect MCB LOUT -> Short L, N-Bar -> Short N' },
+        { id: 'trip', label: 'Observe MCB Trip (Safety)' },
+    ],
+    validate: () => true,
+    customCheck: (simState, components) => {
+        // Check if a circuit MCB has tripped due to short
+        // Ideally we check if it is the one connected to the fault.
+        // Just checking if ANY MCB is tripped is mostly enough for learning.
+        return components.some(c => 
+            c.type === COMPONENT_TYPES.MCB && 
+            c.properties.isTripped && 
+            !c.properties.isOn // Tripped means OFF
+        );
+    }
+  },
+  {
+    id: 'L9',
+    title: 'Earth Leakage Fault',
+    description: 'Learn how RCCBs protect against Leakage. Add a "Leak L-E" fault component downstream.',
+    allowedParts: Object.values(COMPONENT_TYPES),
+    checklist: [
+        { id: 'add_leak', label: 'Place "Leak L-E" Fault' },
+        { id: 'conn_leak', label: 'Connect MCB LOUT -> Leak L, E-Bar -> Leak E' },
+        { id: 'trip_rccb', label: 'Observe RCCB Trip (Safety)' },
+    ],
+    validate: () => true,
+    customCheck: (simState, components) => {
+        return components.some(c => 
+            c.type === COMPONENT_TYPES.RCCB && 
+            c.properties.isTripped
         );
     }
   }
