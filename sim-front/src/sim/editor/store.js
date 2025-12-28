@@ -2,6 +2,8 @@ import { create } from 'zustand';
 import { nanoid } from 'nanoid';
 import { PART_REGISTRY } from './parts/partRegistry';
 import { evaluateNetwork } from './logic/evaluateNetwork';
+import { validateLesson, getLesson } from './lessons/lessonEngine';
+import { LESSON_PATH } from './lessons/lessonPathSinglePhase';
 
 const DEFAULT_SIM_STATE = {
   livePhaseSet: new Set(),
@@ -19,6 +21,12 @@ export const useEditorStore = create((set, get) => ({
   draftWire: null,
   simulationState: DEFAULT_SIM_STATE,
   
+  // Guided Mode State
+  mode: 'SANDBOX', // 'SANDBOX' | 'GUIDED'
+  activeLessonId: 'L0',
+  lessonStatus: { passed: false, checklist: [] },
+  allowedParts: null, // null = all allowed
+
   stage: {
     scale: 1,
     x: 0,
@@ -27,14 +35,64 @@ export const useEditorStore = create((set, get) => ({
 
   // --- Helper to trigger evaluation ---
   _evaluate: () => {
-    const { components, wires } = get();
+    const { components, wires, mode, activeLessonId } = get();
     const newState = evaluateNetwork(components, wires);
-    set({ simulationState: newState });
+    
+    let lessonStatus = { passed: false, checklist: [] };
+    if (mode === 'GUIDED') {
+        lessonStatus = validateLesson(activeLessonId, components, wires, newState);
+    }
+
+    set({ simulationState: newState, lessonStatus });
+  },
+
+  setMode: (mode) => {
+    set({ mode });
+    if (mode === 'GUIDED') {
+        get().startLesson('L0');
+    } else {
+        set({ allowedParts: null });
+    }
+  },
+
+  startLesson: (lessonId) => {
+    const lesson = getLesson(lessonId);
+    if (!lesson) return;
+    set({ 
+        activeLessonId: lessonId,
+        allowedParts: lesson.allowedParts || null,
+        lessonStatus: { passed: false, checklist: lesson.checklist.map(c => ({...c, completed: false})) }
+    });
+    // Optional: Clear canvas on lesson start? Or keep building?
+    // "Guided" implies building sequentially. We keep canvas.
+    get()._evaluate();
+  },
+
+  nextLesson: () => {
+    const { activeLessonId } = get();
+    const idx = LESSON_PATH.findIndex(l => l.id === activeLessonId);
+    if (idx < LESSON_PATH.length - 1) {
+        get().startLesson(LESSON_PATH[idx + 1].id);
+    }
+  },
+
+  prevLesson: () => {
+    const { activeLessonId } = get();
+    const idx = LESSON_PATH.findIndex(l => l.id === activeLessonId);
+    if (idx > 0) {
+        get().startLesson(LESSON_PATH[idx - 1].id);
+    }
   },
 
   // --- Component Actions ---
 
   addComponent: (type) => {
+    const { allowedParts, mode } = get();
+    if (mode === 'GUIDED' && allowedParts && !allowedParts.includes(type)) {
+        alert("This part is not needed for the current lesson.");
+        return;
+    }
+
     const registryItem = PART_REGISTRY[type];
     if (!registryItem) return;
 
@@ -61,8 +119,6 @@ export const useEditorStore = create((set, get) => ({
         c.id === id ? { ...c, ...updates } : c
       ),
     }));
-    // Only re-evaluate if properties that affect logic changed (isOn, enabled)
-    // For simplicity, we can always evaluate or check keys.
     if (updates.properties) {
         get()._evaluate();
     }

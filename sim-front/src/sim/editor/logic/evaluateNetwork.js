@@ -35,9 +35,6 @@ export const evaluateNetwork = (components, wires) => {
     const toId = `${wire.to.compId}:${wire.to.terminalId}`;
     
     // Determine kind based on terminal definitions
-    // We assume the validation logic in Step-2 ensures wires only connect matching kinds
-    // But strictly we should look up the kind.
-    // For efficiency here, we'll try to determine kind from one endpoint.
     const comp = components.find(c => c.id === wire.from.compId);
     if (!comp) return;
     const registry = PART_REGISTRY[comp.type];
@@ -52,13 +49,47 @@ export const evaluateNetwork = (components, wires) => {
 
   // Add Internal Connections (Device Logic)
   components.forEach(comp => {
+    const registryItem = PART_REGISTRY[comp.type];
+    if (!registryItem) return;
+
     if (comp.type === COMPONENT_TYPES.MCB) {
-      // Internal switch: LIN <-> LOUT if isOn
       if (comp.properties.isOn) {
         addEdge(phaseGraph, `${comp.id}:LIN`, `${comp.id}:LOUT`);
       }
+    } else if (comp.type === COMPONENT_TYPES.SWITCH) {
+      if (comp.properties.isOn) {
+        addEdge(phaseGraph, `${comp.id}:IN_L`, `${comp.id}:OUT_L`);
+      }
+    } else if (comp.type === COMPONENT_TYPES.METER) {
+      addEdge(phaseGraph, `${comp.id}:IN_L`, `${comp.id}:OUT_L`);
+      addEdge(neutralGraph, `${comp.id}:IN_N`, `${comp.id}:OUT_N`);
+    } else if (comp.type === COMPONENT_TYPES.NEUTRAL_BAR) {
+      // Connect all N terminals together
+      const terms = registryItem.terminals;
+      for (let i = 0; i < terms.length - 1; i++) {
+        addEdge(neutralGraph, `${comp.id}:${terms[i].id}`, `${comp.id}:${terms[i+1].id}`);
+      }
+    } else if (comp.type === COMPONENT_TYPES.EARTH_BAR) {
+      // Connect all E terminals together
+      const terms = registryItem.terminals;
+      for (let i = 0; i < terms.length - 1; i++) {
+        addEdge(earthGraph, `${comp.id}:${terms[i].id}`, `${comp.id}:${terms[i+1].id}`);
+      }
+    } else if (comp.type === COMPONENT_TYPES.BUSBAR) {
+      // Connect IN to all OUTs (chain them or star)
+      // Let's star them from IN for simplicity or chain. 
+      // Chaining is safer against recursion depth if many nodes? Not really.
+      // Star from IN:
+      const terms = registryItem.terminals;
+      const inT = terms.find(t => t.id === 'IN');
+      if (inT) {
+         terms.forEach(t => {
+            if (t.id !== 'IN') {
+               addEdge(phaseGraph, `${comp.id}:IN`, `${comp.id}:${t.id}`);
+            }
+         });
+      }
     }
-    // Supply does not need internal edges for propagation; it IS the source.
   });
 
   // 2. Identify Sources
@@ -96,7 +127,7 @@ export const evaluateNetwork = (components, wires) => {
   propagate(neutralSources, neutralGraph, neutralSet);
   propagate(earthSources, earthGraph, earthSet);
 
-  // 4. Compute Socket States
+  // 4. Compute Socket States (and maybe Lamp states if we want to export them, but they calculate locally)
   components.forEach(comp => {
     if (comp.type === COMPONENT_TYPES.SOCKET) {
       const hasL = livePhaseSet.has(`${comp.id}:L`);

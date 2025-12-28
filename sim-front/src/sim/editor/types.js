@@ -1,7 +1,13 @@
 export const COMPONENT_TYPES = {
   SUPPLY: 'SUPPLY',
+  METER: 'METER',
   MCB: 'MCB',
   SOCKET: 'SOCKET',
+  NEUTRAL_BAR: 'NEUTRAL_BAR',
+  EARTH_BAR: 'EARTH_BAR',
+  BUSBAR: 'BUSBAR',
+  SWITCH: 'SWITCH',
+  LAMP: 'LAMP',
 };
 
 export const TERMINAL_KINDS = {
