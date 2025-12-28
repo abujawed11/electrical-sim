@@ -11,6 +11,10 @@ export const Toolbox = () => {
       
       <div className="space-y-2">
         <ToolButton 
+          label="Mains Supply" 
+          onClick={() => addComponent(COMPONENT_TYPES.SUPPLY)} 
+        />
+        <ToolButton 
           label="MCB (16A)" 
           onClick={() => addComponent(COMPONENT_TYPES.MCB)} 
         />

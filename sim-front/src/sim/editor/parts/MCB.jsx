@@ -8,6 +8,9 @@ export const MCB = ({ id, type, x, y, isSelected, properties, onSelect, onDragEn
   const registryItem = PART_REGISTRY[type];
   const hoveredTerminal = useEditorStore((state) => state.hoveredTerminal);
   const setHoveredTerminal = useEditorStore((state) => state.setHoveredTerminal);
+  const simulationState = useEditorStore((state) => state.simulationState);
+
+  const isOn = properties.isOn;
 
   return (
     <Group
@@ -46,14 +49,16 @@ export const MCB = ({ id, type, x, y, isSelected, properties, onSelect, onDragEn
       />
 
       {/* Switch Toggle (Visual) */}
-      <Rect
-        x={-5}
-        y={-5}
-        width={10}
-        height={10}
-        fill="#1F2937"
-        cornerRadius={1}
-      />
+      <Group y={isOn ? -5 : 5}>
+         <Rect
+            x={-5}
+            y={-5}
+            width={10}
+            height={10}
+            fill={isOn ? '#1F2937' : '#9CA3AF'} // Darker if ON
+            cornerRadius={1}
+        />
+      </Group>
 
       {/* Label */}
       <Text
@@ -78,18 +83,38 @@ export const MCB = ({ id, type, x, y, isSelected, properties, onSelect, onDragEn
         fill="#6B7280"
         listening={false}
       />
+      
+      {/* State Text */}
+       <Text
+        text={isOn ? 'ON' : 'OFF'}
+        fontSize={8}
+        fontStyle="bold"
+        fill={isOn ? '#10B981' : '#EF4444'}
+        y={-5}
+        width={36}
+        offsetX={18}
+        align="center"
+        listening={false}
+      />
 
       {/* Terminals */}
-      {registryItem.terminals.map((t) => (
-        <Terminal
-          key={t.id}
-          componentId={id}
-          terminal={t}
-          isHovered={hoveredTerminal?.compId === id && hoveredTerminal?.terminalId === t.id}
-          onMouseEnter={() => setHoveredTerminal({ compId: id, terminalId: t.id })}
-          onMouseLeave={() => setHoveredTerminal(null)}
-        />
-      ))}
+      {registryItem.terminals.map((t) => {
+        const terminalIdStr = `${id}:${t.id}`;
+        // Only phase matters for MCB terminals usually
+        const isEnergized = simulationState.livePhaseSet.has(terminalIdStr);
+
+        return (
+          <Terminal
+            key={t.id}
+            componentId={id}
+            terminal={t}
+            isHovered={hoveredTerminal?.compId === id && hoveredTerminal?.terminalId === t.id}
+            isEnergized={isEnergized}
+            onMouseEnter={() => setHoveredTerminal({ compId: id, terminalId: t.id })}
+            onMouseLeave={() => setHoveredTerminal(null)}
+          />
+        );
+      })}
     </Group>
   );
 };

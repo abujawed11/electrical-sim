@@ -1,6 +1,7 @@
 import React from 'react';
 import { useEditorStore } from '../store';
 import { PART_REGISTRY } from '../parts/partRegistry';
+import { COMPONENT_TYPES } from '../types';
 
 export const PropertiesPanel = () => {
   const selectedId = useEditorStore((state) => state.selectedId);
@@ -10,6 +11,7 @@ export const PropertiesPanel = () => {
   const updateComponent = useEditorStore((state) => state.updateComponent);
   const removeComponent = useEditorStore((state) => state.removeComponent);
   const deleteWire = useEditorStore((state) => state.deleteWire);
+  const simulationState = useEditorStore((state) => state.simulationState);
 
   // Case 1: Wire Selected
   if (selectedWireId) {
@@ -87,6 +89,53 @@ export const PropertiesPanel = () => {
           />
         </div>
 
+        {/* Specific Properties based on Type */}
+        {selectedComponent.type === COMPONENT_TYPES.MCB && (
+           <div className="flex items-center justify-between p-2 bg-gray-700 rounded">
+              <span className="text-gray-200 text-sm">Switch State</span>
+              <button
+                onClick={() => handlePropChange('isOn', !selectedComponent.properties.isOn)}
+                className={`px-3 py-1 rounded text-xs font-bold ${
+                    selectedComponent.properties.isOn 
+                    ? 'bg-green-600 text-white' 
+                    : 'bg-red-600 text-white'
+                }`}
+              >
+                {selectedComponent.properties.isOn ? 'ON' : 'OFF'}
+              </button>
+           </div>
+        )}
+
+        {selectedComponent.type === COMPONENT_TYPES.SUPPLY && (
+           <div className="flex items-center justify-between p-2 bg-gray-700 rounded">
+              <span className="text-gray-200 text-sm">Mains Power</span>
+              <button
+                onClick={() => handlePropChange('enabled', !selectedComponent.properties.enabled)}
+                className={`px-3 py-1 rounded text-xs font-bold ${
+                    selectedComponent.properties.enabled 
+                    ? 'bg-green-600 text-white' 
+                    : 'bg-gray-600 text-gray-300'
+                }`}
+              >
+                {selectedComponent.properties.enabled ? 'ENABLED' : 'DISABLED'}
+              </button>
+           </div>
+        )}
+        
+        {/* Socket Status Display */}
+        {selectedComponent.type === COMPONENT_TYPES.SOCKET && (
+            <div className="p-3 bg-gray-900 rounded border border-gray-700 space-y-2">
+                <div className="text-xs font-bold text-gray-400 uppercase tracking-wider mb-2">Diagnostic</div>
+                <StatusRow label="Phase" active={simulationState.socketStates[selectedComponent.id]?.hasPhase} />
+                <StatusRow label="Neutral" active={simulationState.socketStates[selectedComponent.id]?.hasNeutral} color="blue" />
+                <StatusRow label="Earth" active={simulationState.socketStates[selectedComponent.id]?.hasEarth} color="green" />
+                
+                <div className="mt-2 pt-2 border-t border-gray-700 text-center font-mono text-xs">
+                    {simulationState.socketStates[selectedComponent.id]?.status}
+                </div>
+            </div>
+        )}
+
         <div className="space-y-1">
           <label className="text-xs text-gray-400 block">Rating</label>
           <input
@@ -108,6 +157,22 @@ export const PropertiesPanel = () => {
       </div>
     </div>
   );
+};
+
+const StatusRow = ({ label, active, color = 'red' }) => {
+    let dotColor = 'bg-gray-600';
+    if (active) {
+        if (color === 'red') dotColor = 'bg-red-500';
+        if (color === 'blue') dotColor = 'bg-blue-500';
+        if (color === 'green') dotColor = 'bg-green-500';
+    }
+
+    return (
+        <div className="flex items-center justify-between text-xs">
+            <span className="text-gray-400">{label}</span>
+            <div className={`w-2 h-2 rounded-full ${dotColor}`} />
+        </div>
+    );
 };
 
 const EmptyPanel = () => (

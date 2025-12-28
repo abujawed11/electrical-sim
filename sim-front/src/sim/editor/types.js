@@ -1,4 +1,5 @@
 export const COMPONENT_TYPES = {
+  SUPPLY: 'SUPPLY',
   MCB: 'MCB',
   SOCKET: 'SOCKET',
 };
