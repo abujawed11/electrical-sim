@@ -9,6 +9,9 @@ export const Meter = ({ id, type, x, y, isSelected, properties, onSelect, onDrag
   const hoveredTerminal = useEditorStore((state) => state.hoveredTerminal);
   const setHoveredTerminal = useEditorStore((state) => state.setHoveredTerminal);
   const simulationState = useEditorStore((state) => state.simulationState);
+  
+  // Energy Reading
+  const energyKWh = useEditorStore((state) => state.energyKWh);
 
   return (
     <Group
@@ -57,8 +60,8 @@ export const Meter = ({ id, type, x, y, isSelected, properties, onSelect, onDrag
         strokeWidth={1}
       />
       <Text
-        text="0024.5"
-        x={-20}
+        text={energyKWh.toFixed(3)}
+        x={-22}
         y={-20}
         fontSize={12}
         fontFamily="monospace"

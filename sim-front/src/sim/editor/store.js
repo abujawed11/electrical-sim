@@ -15,8 +15,9 @@ const DEFAULT_SIM_STATE = {
   socketStates: {},
   protectedPhaseSet: new Set(),
   protectedNeutralSet: new Set(),
-  loadData: {}, // { compId: { currentA, powerW, isPowered } }
-  deviceLoads: {}, // { compId: totalA }
+  loadData: {}, 
+  deviceLoads: {}, 
+  totalSystemPowerW: 0,
 };
 
 export const useEditorStore = create(
@@ -32,6 +33,12 @@ export const useEditorStore = create(
       messages: [], 
       
       mainsVoltage: 230,
+
+      // Time & Energy Simulation State
+      simRunning: true,
+      timeScale: 1, // 1x real time
+      energyKWh: 0,
+      lastTickMs: Date.now(),
 
       // Guided Mode State
       mode: 'SANDBOX', 
@@ -50,6 +57,48 @@ export const useEditorStore = create(
           get()._evaluate();
       },
 
+      // --- Simulation Control Actions ---
+      toggleSim: () => {
+          set(state => ({ 
+              simRunning: !state.simRunning,
+              lastTickMs: Date.now() // Reset tick to prevent jump
+          }));
+      },
+
+      setTimeScale: (scale) => {
+          set({ timeScale: Number(scale) });
+      },
+
+      resetEnergy: () => {
+          set({ energyKWh: 0 });
+      },
+
+      tickEnergy: (now) => {
+          const { simRunning, lastTickMs, timeScale, simulationState } = get();
+          if (!simRunning) {
+              // Just update lastTick to now so we don't accumulate paused time later
+              set({ lastTickMs: now });
+              return;
+          }
+
+          const dtMs = now - lastTickMs;
+          if (dtMs <= 0) return; // Should not happen but safety check
+
+          const dtSec = dtMs / 1000;
+          const scaledDtSec = dtSec * timeScale;
+          const totalPowerW = simulationState.totalSystemPowerW || 0;
+
+          // Energy (kWh) = Power (kW) * Time (h)
+          // Power (kW) = W / 1000
+          // Time (h) = sec / 3600
+          const deltaKWh = (totalPowerW / 1000) * (scaledDtSec / 3600);
+
+          set(state => ({
+              energyKWh: state.energyKWh + deltaKWh,
+              lastTickMs: now
+          }));
+      },
+
       // --- Helper to trigger evaluation ---
       _evaluate: () => {
         let { components, wires, mode, activeLessonId, mainsVoltage } = get();
@@ -58,9 +107,10 @@ export const useEditorStore = create(
         let simState = evaluateNetwork(components, wires);
         
         // 2. Compute Loads
-        const { loadData, deviceLoads } = evaluateLoads(components, wires, simState, mainsVoltage);
-        simState.loadData = loadData;
-        simState.deviceLoads = deviceLoads;
+        const loadRes = evaluateLoads(components, wires, simState, mainsVoltage);
+        simState.loadData = loadRes.loadData;
+        simState.deviceLoads = loadRes.deviceLoads;
+        simState.totalSystemPowerW = loadRes.totalSystemPowerW;
 
         // 3. Check Faults & Trip Devices
         const trips = evaluateFaults(components, wires, simState);
@@ -84,9 +134,10 @@ export const useEditorStore = create(
             // Re-evaluate network since topology changed
             simState = evaluateNetwork(newComponents, wires);
             // Re-calc loads for new state
-            const loadRes = evaluateLoads(newComponents, wires, simState, mainsVoltage);
-            simState.loadData = loadRes.loadData;
-            simState.deviceLoads = loadRes.deviceLoads;
+            const loadRes2 = evaluateLoads(newComponents, wires, simState, mainsVoltage);
+            simState.loadData = loadRes2.loadData;
+            simState.deviceLoads = loadRes2.deviceLoads;
+            simState.totalSystemPowerW = loadRes2.totalSystemPowerW;
             
             components = newComponents;
         }
@@ -227,7 +278,8 @@ export const useEditorStore = create(
               lessonStatus: mode === 'GUIDED' 
                 ? { passed: false, checklist: get().lessonStatus.checklist.map(c => ({...c, completed: false})) }
                 : { passed: false, checklist: [] },
-              messages: []
+              messages: [],
+              energyKWh: 0 // Reset energy too
           });
           get()._evaluate();
       },
@@ -358,10 +410,16 @@ export const useEditorStore = create(
           mode: state.mode,
           activeLessonId: state.activeLessonId,
           stage: state.stage,
-          mainsVoltage: state.mainsVoltage, // Persist voltage
+          mainsVoltage: state.mainsVoltage,
+          simRunning: state.simRunning,
+          timeScale: state.timeScale,
+          energyKWh: state.energyKWh,
+          lastTickMs: state.lastTickMs // Persist tick so we don't jump time on refresh? Actually better to reset to Now on hydrate.
+          // We'll reset lastTickMs on hydrate or init to avoid massive jumps.
       }),
       onRehydrateStorage: () => (state) => {
           if (state) {
+              state.lastTickMs = Date.now(); // Reset tick to now
               state._evaluate();
           }
       },

@@ -8,11 +8,12 @@ import { PART_REGISTRY } from '../parts/partRegistry';
  * @param {Array} wires 
  * @param {Object} simulationState { livePhaseSet, neutralSet }
  * @param {Number} mainsVoltage
- * @returns {Object} { loadData: { compId: { currentA, powerW, isPowered } }, deviceLoads: { compId: totalA } }
+ * @returns {Object} { loadData: { compId: { currentA, powerW, isPowered } }, deviceLoads: { compId: totalA }, totalSystemPowerW: number }
  */
 export const evaluateLoads = (components, wires, simulationState, mainsVoltage) => {
   const loadData = {}; // Per load component
   const deviceLoads = { 'TOTAL_MAINS': 0 }; // Per protection device + total
+  let totalSystemPowerW = 0;
 
   const { livePhaseSet, neutralSet } = simulationState;
 
@@ -66,19 +67,22 @@ export const evaluateLoads = (components, wires, simulationState, mainsVoltage) 
               resistance: powerW > 0 ? (mainsVoltage * mainsVoltage / powerW) : Infinity
           };
 
-          if (isPowered && currentA > 0) {
-              deviceLoads['TOTAL_MAINS'] = (deviceLoads['TOTAL_MAINS'] || 0) + currentA;
-              
-              // 3. Attribute load to upstream breakers
-              const breakers = findUpstreamBreakers(termL, phaseGraph, components);
-              breakers.forEach(bId => {
-                  deviceLoads[bId] = (deviceLoads[bId] || 0) + currentA;
-              });
+          if (isPowered) {
+              totalSystemPowerW += powerW; // Accumulate Wattage
+              if (currentA > 0) {
+                  deviceLoads['TOTAL_MAINS'] = (deviceLoads['TOTAL_MAINS'] || 0) + currentA;
+                  
+                  // 3. Attribute load to upstream breakers
+                  const breakers = findUpstreamBreakers(termL, phaseGraph, components);
+                  breakers.forEach(bId => {
+                      deviceLoads[bId] = (deviceLoads[bId] || 0) + currentA;
+                  });
+              }
           }
       }
   });
 
-  return { loadData, deviceLoads };
+  return { loadData, deviceLoads, totalSystemPowerW };
 };
 
 // BFS to find ALL upstream protection devices
