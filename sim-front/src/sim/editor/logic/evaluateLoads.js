@@ -53,7 +53,7 @@ export const evaluateLoads = (components, wires, simulationState, mainsVoltage) 
 
   // 2. Identify Loads
   components.forEach(comp => {
-      if ([COMPONENT_TYPES.LAMP, COMPONENT_TYPES.GENERIC_LOAD, COMPONENT_TYPES.FAN, COMPONENT_TYPES.AC, COMPONENT_TYPES.HEATER].includes(comp.type)) {
+      if ([COMPONENT_TYPES.LAMP, COMPONENT_TYPES.GENERIC_LOAD, COMPONENT_TYPES.FAN, COMPONENT_TYPES.AC, COMPONENT_TYPES.HEATER, COMPONENT_TYPES.GEYSER].includes(comp.type)) {
           const P = comp.properties.powerW || 0;
           const pf = comp.properties.powerFactor || 1.0;
           const type = comp.properties.loadType || 'RESISTIVE';

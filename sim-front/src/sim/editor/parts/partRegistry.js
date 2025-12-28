@@ -19,6 +19,7 @@ import { GenericLoad } from './GenericLoad';
 import { Fan } from './Fan';
 import { AC } from './AC';
 import { Heater } from './Heater';
+import { Geyser } from './Geyser';
 
 const COMPONENTS = {
   [COMPONENT_TYPES.SUPPLY]: Supply,
@@ -35,6 +36,7 @@ const COMPONENTS = {
   [COMPONENT_TYPES.FAN]: Fan,
   [COMPONENT_TYPES.AC]: AC,
   [COMPONENT_TYPES.HEATER]: Heater,
+  [COMPONENT_TYPES.GEYSER]: Geyser,
   [COMPONENT_TYPES.SOCKET]: Socket,
   [COMPONENT_TYPES.FAULT_SHORT_LN]: FaultShortLN,
   [COMPONENT_TYPES.FAULT_LEAK_LE]: FaultLeakLE,

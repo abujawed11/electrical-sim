@@ -71,7 +71,7 @@ export const PropertiesPanel = () => {
     });
   };
 
-  const isLoad = [COMPONENT_TYPES.LAMP, COMPONENT_TYPES.GENERIC_LOAD, COMPONENT_TYPES.FAN, COMPONENT_TYPES.AC, COMPONENT_TYPES.HEATER].includes(selectedComponent.type);
+  const isLoad = [COMPONENT_TYPES.LAMP, COMPONENT_TYPES.GENERIC_LOAD, COMPONENT_TYPES.FAN, COMPONENT_TYPES.AC, COMPONENT_TYPES.HEATER, COMPONENT_TYPES.GEYSER].includes(selectedComponent.type);
   const isBreaker = selectedComponent.type === COMPONENT_TYPES.MCB || selectedComponent.type === COMPONENT_TYPES.RCBO;
   const isRCCB = selectedComponent.type === COMPONENT_TYPES.RCCB;
 

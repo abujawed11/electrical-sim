@@ -12,6 +12,7 @@ export const COMPONENT_TYPES = {
   FAN: 'FAN',
   AC: 'AC',
   HEATER: 'HEATER',
+  GEYSER: 'GEYSER',
   RCCB: 'RCCB',
   RCBO: 'RCBO',
   FAULT_SHORT_LN: 'FAULT_SHORT_LN',

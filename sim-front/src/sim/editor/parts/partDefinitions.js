@@ -160,6 +160,15 @@ export const PART_DEFINITIONS = {
       { id: 'E', kind: TERMINAL_KINDS.EARTH, relX: 15, relY: 30, label: 'E' },
     ],
   },
+  [COMPONENT_TYPES.GEYSER]: {
+    name: 'Water Geyser',
+    defaultProperties: { label: 'GEYSER-1', powerW: 2500, powerFactor: 1.0, loadType: LOAD_TYPES.RESISTIVE },
+    terminals: [
+      { id: 'L', kind: TERMINAL_KINDS.PHASE, relX: -15, relY: 30, label: 'L' },
+      { id: 'N', kind: TERMINAL_KINDS.NEUTRAL, relX: 0, relY: 30, label: 'N' },
+      { id: 'E', kind: TERMINAL_KINDS.EARTH, relX: 15, relY: 30, label: 'E' },
+    ],
+  },
   [COMPONENT_TYPES.SOCKET]: {
     name: 'Power Socket',
     defaultProperties: {
