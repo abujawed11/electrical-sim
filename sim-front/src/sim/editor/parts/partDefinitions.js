@@ -205,4 +205,14 @@ export const PART_DEFINITIONS = {
       { id: 'FEET', kind: TERMINAL_KINDS.EARTH, relX: 20, relY: 30, label: 'FEET' },
     ],
   },
+  [COMPONENT_TYPES.JUNCTION_BOX]: {
+    name: 'Junction Box',
+    defaultProperties: { label: 'JB' },
+    terminals: [
+      { id: 'T1', kind: TERMINAL_KINDS.GENERIC, relX: 0, relY: -20, label: '1' },
+      { id: 'T2', kind: TERMINAL_KINDS.GENERIC, relX: 20, relY: 0, label: '2' },
+      { id: 'T3', kind: TERMINAL_KINDS.GENERIC, relX: 0, relY: 20, label: '3' },
+      { id: 'T4', kind: TERMINAL_KINDS.GENERIC, relX: -20, relY: 0, label: '4' },
+    ],
+  },
 };

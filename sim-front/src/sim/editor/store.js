@@ -348,10 +348,13 @@ export const useEditorStore = create(
         if (!fromTerm || !toTerm) { set({ draftWire: null }); return; }
 
         if (fromTerm.kind !== toTerm.kind) {
-          console.warn(`Mismatch: ${fromTerm.kind} vs ${toTerm.kind}`);
-          get().addMessage(`Cannot connect ${fromTerm.kind} to ${toTerm.kind}. Use a Fault Part if testing faults.`, 'error');
-          set({ draftWire: null });
-          return;
+          // Allow GENERIC to connect to anything
+          if (fromTerm.kind !== 'GENERIC' && toTerm.kind !== 'GENERIC') {
+              console.warn(`Mismatch: ${fromTerm.kind} vs ${toTerm.kind}`);
+              get().addMessage(`Cannot connect ${fromTerm.kind} to ${toTerm.kind}. Use a Junction Box or Fault Part if needed.`, 'error');
+              set({ draftWire: null });
+              return;
+          }
         }
 
         const exists = wires.some(w => 

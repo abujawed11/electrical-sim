@@ -40,6 +40,12 @@ export const evaluateLoads = (components, wires, simulationState, mainsVoltage) 
           const terms = PART_REGISTRY[c.type].terminals;
           terms.forEach(t => { if(t.id !== 'IN') addInternal(phaseGraph, c.id, t.id, 'IN'); });
       }
+      else if (c.type === COMPONENT_TYPES.JUNCTION_BOX) {
+          const terms = PART_REGISTRY[c.type].terminals;
+          for (let i = 0; i < terms.length - 1; i++) {
+              addInternal(phaseGraph, c.id, terms[i].id, terms[i+1].id);
+          }
+      }
   });
 
   function addInternal(graph, compId, t1, t2) {

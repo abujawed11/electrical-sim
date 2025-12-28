@@ -40,9 +40,9 @@ export const evaluateNetwork = (components, wires) => {
     const registry = PART_REGISTRY[comp.type];
     const term = registry.terminals.find(t => t.id === wire.from.terminalId);
     if (term) {
-      if (term.kind === TERMINAL_KINDS.PHASE) addEdge(phaseGraph, fromId, toId);
-      if (term.kind === TERMINAL_KINDS.NEUTRAL) addEdge(neutralGraph, fromId, toId);
-      if (term.kind === TERMINAL_KINDS.EARTH) addEdge(earthGraph, fromId, toId);
+      if (term.kind === TERMINAL_KINDS.PHASE || term.kind === TERMINAL_KINDS.GENERIC) addEdge(phaseGraph, fromId, toId);
+      if (term.kind === TERMINAL_KINDS.NEUTRAL || term.kind === TERMINAL_KINDS.GENERIC) addEdge(neutralGraph, fromId, toId);
+      if (term.kind === TERMINAL_KINDS.EARTH || term.kind === TERMINAL_KINDS.GENERIC) addEdge(earthGraph, fromId, toId);
     }
   });
 
@@ -86,6 +86,18 @@ export const evaluateNetwork = (components, wires) => {
          terms.forEach(t => {
             if (t.id !== 'IN') addEdge(phaseGraph, `${comp.id}:IN`, `${comp.id}:${t.id}`);
          });
+      }
+    }
+    else if (comp.type === COMPONENT_TYPES.JUNCTION_BOX) {
+      // Connect all terminals to each other in ALL graphs
+      const terms = registryItem.terminals;
+      // Simple chain
+      for (let i = 0; i < terms.length - 1; i++) {
+          const u = `${comp.id}:${terms[i].id}`;
+          const v = `${comp.id}:${terms[i+1].id}`;
+          addEdge(phaseGraph, u, v);
+          addEdge(neutralGraph, u, v);
+          addEdge(earthGraph, u, v);
       }
     }
   });
@@ -143,8 +155,8 @@ export const evaluateNetwork = (components, wires) => {
     const registry = PART_REGISTRY[comp.type];
     const term = registry.terminals.find(t => t.id === wire.from.terminalId);
     if (term) {
-      if (term.kind === TERMINAL_KINDS.PHASE) addEdge(protPhaseGraph, fromId, toId);
-      if (term.kind === TERMINAL_KINDS.NEUTRAL) addEdge(protNeutralGraph, fromId, toId);
+      if (term.kind === TERMINAL_KINDS.PHASE || term.kind === TERMINAL_KINDS.GENERIC) addEdge(protPhaseGraph, fromId, toId);
+      if (term.kind === TERMINAL_KINDS.NEUTRAL || term.kind === TERMINAL_KINDS.GENERIC) addEdge(protNeutralGraph, fromId, toId);
     }
   });
 
@@ -171,6 +183,15 @@ export const evaluateNetwork = (components, wires) => {
              if (t.id !== 'IN') addEdge(protPhaseGraph, `${comp.id}:IN`, `${comp.id}:${t.id}`);
           });
        }
+    }
+    else if (comp.type === COMPONENT_TYPES.JUNCTION_BOX) {
+      const terms = registryItem.terminals;
+      for (let i = 0; i < terms.length - 1; i++) {
+          const u = `${comp.id}:${terms[i].id}`;
+          const v = `${comp.id}:${terms[i+1].id}`;
+          addEdge(protPhaseGraph, u, v);
+          addEdge(protNeutralGraph, u, v);
+      }
     }
   });
 

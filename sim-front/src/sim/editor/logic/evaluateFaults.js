@@ -51,6 +51,13 @@ export const evaluateFaults = (components, wires, simulationState) => {
               if (t.id !== 'IN') addInternal(phaseGraph, c.id, t.id, 'IN');
           });
       }
+      else if (c.type === COMPONENT_TYPES.JUNCTION_BOX) {
+          const registry = PART_REGISTRY[c.type];
+          const terms = registry.terminals;
+          for (let i = 0; i < terms.length - 1; i++) {
+              addInternal(phaseGraph, c.id, terms[i].id, terms[i+1].id);
+          }
+      }
   });
 
   function addInternal(graph, compId, t1, t2) {
@@ -64,7 +71,24 @@ export const evaluateFaults = (components, wires, simulationState) => {
 
   // --- Fault Detection ---
 
-  // 1. Short Circuit (L-N)
+  // 0. Direct Node Short (L meets N) - e.g. via Junction Box
+  // Check intersection of livePhaseSet and neutralSet
+  const deadShorts = [...livePhaseSet].filter(x => neutralSet.has(x));
+  if (deadShorts.length > 0) {
+      // Pick one shorted node to trace from
+      const shortNode = deadShorts[0];
+      const breaker = findUpstreamBreaker(shortNode, phaseGraph, components, 'SHORT');
+      if (breaker) {
+          tripActions.push({ 
+              id: breaker.id, 
+              updates: { isTripped: true, isOn: false }, 
+              reason: 'SHORT_CIRCUIT_DIRECT',
+              msg: `Direct Short Circuit detected! Tripped ${breaker.properties.label}`
+          });
+      }
+  }
+
+  // 1. Short Circuit (L-N) Fault Part
   const shortFaults = components.filter(c => c.type === COMPONENT_TYPES.FAULT_SHORT_LN);
   shortFaults.forEach(fault => {
       const termA = `${fault.id}:A`;
