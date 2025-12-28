@@ -827,3 +827,112 @@ To make wiring neat, you need:
 **Most Important**: Grid snapping + Right-angles + Junction boxes = 80% improvement in neatness!
 
 Let me know which features you'd like to implement first, and I can help you code them!
+
+
+
+
+
+
+ I've created a comprehensive Neat Wiring Guide for you! It's saved as NEAT_WIRING_GUIDE.md.
+
+  🎯 Key Findings
+
+  To make your wiring neat and professional, you need 3 categories of improvements:
+
+  ---
+  1. Visual Improvements (No new components needed)
+
+  ⭐ Top 5 Quick Wins:
+
+  1. Grid Snapping - Snap wires to a grid (10px) for perfect alignment
+  2. Right-Angle Routing - Force horizontal/vertical segments only (like real electrical plans)
+  3. Wire Labels - Add text labels like "L1 from MCB-1"
+  4. Thicker Wires for High Current - Visual thickness based on amps
+  5. Waypoint Editing UI - Drag waypoints to adjust wire routes
+
+  Impact: Makes everything look professional with minimal effort
+  Time: 4 hours to implement all 5
+
+  ---
+  2. Essential Components to Add
+
+  ⭐⭐⭐ Junction Box (MOST IMPORTANT!)
+
+  Why: In real wiring, you can't connect 3+ wires at a single terminal. Junction boxes are where wires meet.
+
+  Example:
+  Switch → Junction Box → Lamp 1
+                        → Lamp 2
+                        → Lamp 3
+
+  Before: Messy overlapping wires
+  After: Organized branching through junction box
+
+  Other Useful Components:
+
+  2. Conduit/Pipe - Protect wires in walls (visual guide for wire paths)
+  3. Cable Tray - Industrial wire organization
+  4. Cable Clamps - Secure wires at points
+  5. Wire Marker Tags - Label wire ends (like real electricians)
+  6. Distribution Panel Enclosure - Visual box to house all MCBs
+
+  ---
+  3. Advanced Features
+
+  1. Auto-routing - A* algorithm to route wires around obstacles
+  2. Wire bundling - Group parallel wires visually
+  3. Multi-select wires - Move/align multiple wires together
+  4. Wire templates - Save common routes, reuse them
+  5. Wire cost calculator - Based on length × gauge
+
+  ---
+  Before vs After Example
+
+  Before:
+
+  [MCB]
+    |  \____
+    |       \
+  [Lamp]  [Socket]
+  Free-form spaghetti wires 🍝
+
+  After:
+
+  [MCB]──┬──[Junction Box]──┬──[Lamp]
+         │                  └──[Socket]
+         │
+      (Grid-aligned, right-angles, labeled)
+  Professional electrical diagram! 📐
+
+  ---
+  My Recommendations
+
+  Start Here (Biggest impact, easiest to implement):
+
+  Weekend Project (4 hours):
+  1. ✅ Grid snapping (20 lines of code)
+  2. ✅ Right-angle routing (30 lines)
+  3. ✅ Junction Box component (copy existing component structure)
+  4. ✅ Wire labels (15 lines)
+  5. ✅ Grid overlay toggle (optional visual guide)
+
+  Result: 80% improvement in wiring neatness!
+
+  Next Steps (When ready):
+
+  - Auto-routing algorithm
+  - Conduit components
+  - Wire alignment tools
+  - Cost calculator
+
+  ---
+  Implementation Help
+
+  The guide includes:
+  - ✅ Complete code examples for each feature
+  - ✅ Visual diagrams
+  - ✅ Step-by-step implementation
+  - ✅ Priority ordering
+  - ✅ Real-world wiring standards (IEC color codes, bend radius)
+
+  Want me to implement any of these features for you? The Junction Box + Grid Snapping + Right-Angle routing would make the BIGGEST difference immediately!
