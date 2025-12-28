@@ -1,7 +1,14 @@
 import React from 'react';
 import { Group, Rect, Circle, Text } from 'react-konva';
+import { PART_REGISTRY } from './partRegistry';
+import { useEditorStore } from '../store';
+import { Terminal } from '../components/Terminal';
 
-export const Socket = ({ id, x, y, isSelected, properties, onSelect, onDragEnd }) => {
+export const Socket = ({ id, type, x, y, isSelected, properties, onSelect, onDragEnd }) => {
+  const registryItem = PART_REGISTRY[type];
+  const hoveredTerminal = useEditorStore((state) => state.hoveredTerminal);
+  const setHoveredTerminal = useEditorStore((state) => state.setHoveredTerminal);
+
   return (
     <Group
       id={id}
@@ -52,7 +59,20 @@ export const Socket = ({ id, x, y, isSelected, properties, onSelect, onDragEnd }
         offsetX={23}
         align="center"
         fill="#1F2937"
+        listening={false}
       />
+
+      {/* Terminals */}
+      {registryItem.terminals.map((t) => (
+        <Terminal
+          key={t.id}
+          componentId={id}
+          terminal={t}
+          isHovered={hoveredTerminal?.compId === id && hoveredTerminal?.terminalId === t.id}
+          onMouseEnter={() => setHoveredTerminal({ compId: id, terminalId: t.id })}
+          onMouseLeave={() => setHoveredTerminal(null)}
+        />
+      ))}
     </Group>
   );
 };

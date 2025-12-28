@@ -2,3 +2,10 @@ export const COMPONENT_TYPES = {
   MCB: 'MCB',
   SOCKET: 'SOCKET',
 };
+
+export const TERMINAL_KINDS = {
+  PHASE: 'PHASE',
+  NEUTRAL: 'NEUTRAL',
+  EARTH: 'EARTH',
+  GENERIC: 'GENERIC',
+};

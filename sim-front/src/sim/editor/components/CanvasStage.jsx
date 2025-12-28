@@ -3,12 +3,23 @@ import { Stage, Layer } from 'react-konva';
 import { useEditorStore } from '../store';
 import { Grid } from '../drawing/Grid';
 import { PART_REGISTRY } from '../parts/partRegistry';
+import { WiresLayer } from './WiresLayer';
+import { DraftWire } from './DraftWire';
 
 export const CanvasStage = () => {
   const stageRef = useRef(null);
   const containerRef = useRef(null);
   const [dimensions, setDimensions] = React.useState({ width: 0, height: 0 });
-  const { components, updateComponent, selectComponent, updateStage, selectedId } = useEditorStore();
+  const { 
+    components, 
+    updateComponent, 
+    selectComponent, 
+    updateStage, 
+    selectedId,
+    updateDraft,
+    cancelWire,
+    selectWire
+  } = useEditorStore();
 
   React.useEffect(() => {
     if (!containerRef.current) return;
@@ -25,6 +36,22 @@ export const CanvasStage = () => {
     resizeObserver.observe(containerRef.current);
     return () => resizeObserver.disconnect();
   }, []);
+
+  React.useEffect(() => {
+    const handleKeyDown = (e) => {
+      if (e.key === 'Escape') {
+        cancelWire();
+        selectComponent(null);
+        selectWire(null);
+      }
+      if (e.key === 'Delete' || e.key === 'Backspace') {
+        // Optional: Trigger delete logic if implemented generally
+        // But for now Esc is the main requirement
+      }
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [cancelWire, selectComponent, selectWire]);
 
   const handleWheel = (e) => {
     e.evt.preventDefault();
@@ -70,7 +97,22 @@ export const CanvasStage = () => {
     // Deselect if clicked on empty stage
     if (e.target === e.target.getStage()) {
       selectComponent(null);
+      selectWire(null);
+      cancelWire(); // Cancel draft if any
     }
+  };
+
+  const handleMouseMove = () => {
+    const stage = stageRef.current;
+    if (!stage) return;
+    
+    const pointer = stage.getPointerPosition();
+    if (!pointer) return;
+
+    const transform = stage.getAbsoluteTransform().copy().invert();
+    const pos = transform.point(pointer);
+    
+    updateDraft(pos.x, pos.y);
   };
 
   return (
@@ -84,10 +126,13 @@ export const CanvasStage = () => {
         onDragEnd={handleDragEnd}
         onClick={handleStageClick}
         onTap={handleStageClick}
+        onMouseMove={handleMouseMove}
         className="cursor-crosshair"
       >
         <Layer>
           <Grid />
+          <WiresLayer />
+          
           {components.map((comp) => {
             const registryItem = PART_REGISTRY[comp.type];
             if (!registryItem) return null;
@@ -111,6 +156,8 @@ export const CanvasStage = () => {
               />
             );
           })}
+          
+          <DraftWire />
         </Layer>
       </Stage>
     </div>

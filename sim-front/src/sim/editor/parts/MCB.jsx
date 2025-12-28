@@ -1,7 +1,14 @@
 import React from 'react';
 import { Group, Rect, Text } from 'react-konva';
+import { PART_REGISTRY } from './partRegistry';
+import { useEditorStore } from '../store';
+import { Terminal } from '../components/Terminal';
 
-export const MCB = ({ id, x, y, isSelected, properties, onSelect, onDragEnd }) => {
+export const MCB = ({ id, type, x, y, isSelected, properties, onSelect, onDragEnd }) => {
+  const registryItem = PART_REGISTRY[type];
+  const hoveredTerminal = useEditorStore((state) => state.hoveredTerminal);
+  const setHoveredTerminal = useEditorStore((state) => state.setHoveredTerminal);
+
   return (
     <Group
       id={id}
@@ -57,6 +64,7 @@ export const MCB = ({ id, x, y, isSelected, properties, onSelect, onDragEnd }) =
         offsetX={18}
         align="center"
         fill="#1F2937"
+        listening={false}
       />
       
       {/* Rating */}
@@ -68,7 +76,20 @@ export const MCB = ({ id, x, y, isSelected, properties, onSelect, onDragEnd }) =
         offsetX={18}
         align="center"
         fill="#6B7280"
+        listening={false}
       />
+
+      {/* Terminals */}
+      {registryItem.terminals.map((t) => (
+        <Terminal
+          key={t.id}
+          componentId={id}
+          terminal={t}
+          isHovered={hoveredTerminal?.compId === id && hoveredTerminal?.terminalId === t.id}
+          onMouseEnter={() => setHoveredTerminal({ compId: id, terminalId: t.id })}
+          onMouseLeave={() => setHoveredTerminal(null)}
+        />
+      ))}
     </Group>
   );
 };

@@ -4,18 +4,55 @@ import { PART_REGISTRY } from '../parts/partRegistry';
 
 export const PropertiesPanel = () => {
   const selectedId = useEditorStore((state) => state.selectedId);
+  const selectedWireId = useEditorStore((state) => state.selectedWireId);
   const components = useEditorStore((state) => state.components);
+  const wires = useEditorStore((state) => state.wires);
   const updateComponent = useEditorStore((state) => state.updateComponent);
   const removeComponent = useEditorStore((state) => state.removeComponent);
+  const deleteWire = useEditorStore((state) => state.deleteWire);
 
-  const selectedComponent = components.find((c) => c.id === selectedId);
+  // Case 1: Wire Selected
+  if (selectedWireId) {
+    const wire = wires.find(w => w.id === selectedWireId);
+    if (!wire) return <EmptyPanel />;
 
-  if (!selectedComponent) {
+    const fromComp = components.find(c => c.id === wire.from.compId);
+    const toComp = components.find(c => c.id === wire.to.compId);
+
     return (
-      <div className="w-72 bg-gray-800 border-l border-gray-700 p-4 text-gray-500 text-sm">
-        Select a component to edit properties.
+      <div className="w-72 bg-gray-800 border-l border-gray-700 flex flex-col p-4">
+        <h2 className="text-gray-200 font-bold mb-4 uppercase text-xs tracking-wider">Wire Properties</h2>
+        
+        <div className="mb-4 space-y-2">
+           <div className="p-2 bg-gray-700 rounded border border-gray-600">
+             <div className="text-xs text-gray-400">From</div>
+             <div className="text-sm text-gray-200 font-medium">
+                {fromComp?.properties.label || wire.from.compId} <span className="text-gray-400">({wire.from.terminalId})</span>
+             </div>
+           </div>
+           
+           <div className="p-2 bg-gray-700 rounded border border-gray-600">
+             <div className="text-xs text-gray-400">To</div>
+             <div className="text-sm text-gray-200 font-medium">
+                {toComp?.properties.label || wire.to.compId} <span className="text-gray-400">({wire.to.terminalId})</span>
+             </div>
+           </div>
+        </div>
+
+        <button
+          onClick={() => deleteWire(wire.id)}
+          className="mt-4 w-full py-2 bg-red-900/50 hover:bg-red-900 text-red-200 rounded border border-red-800 transition-colors"
+        >
+          Delete Wire
+        </button>
       </div>
     );
+  }
+
+  // Case 2: Component Selected
+  const selectedComponent = components.find((c) => c.id === selectedId);
+  if (!selectedComponent) {
+    return <EmptyPanel />;
   }
 
   const registryItem = PART_REGISTRY[selectedComponent.type];
@@ -31,7 +68,7 @@ export const PropertiesPanel = () => {
 
   return (
     <div className="w-72 bg-gray-800 border-l border-gray-700 flex flex-col p-4">
-      <h2 className="text-gray-200 font-bold mb-4 uppercase text-xs tracking-wider">Properties</h2>
+      <h2 className="text-gray-200 font-bold mb-4 uppercase text-xs tracking-wider">Component Properties</h2>
 
       <div className="mb-6">
         <label className="text-xs text-gray-400 block mb-1">Type</label>
@@ -72,3 +109,9 @@ export const PropertiesPanel = () => {
     </div>
   );
 };
+
+const EmptyPanel = () => (
+  <div className="w-72 bg-gray-800 border-l border-gray-700 p-4 text-gray-500 text-sm">
+    Select a component or wire to edit.
+  </div>
+);
