@@ -4,6 +4,7 @@ import { nanoid } from 'nanoid';
 import { PART_REGISTRY } from './parts/partRegistry';
 import { evaluateNetwork } from './logic/evaluateNetwork';
 import { evaluateFaults } from './logic/evaluateFaults';
+import { evaluateLoads } from './logic/evaluateLoads';
 import { validateLesson, getLesson } from './lessons/lessonEngine';
 import { LESSON_PATH } from './lessons/lessonPathSinglePhase';
 
@@ -14,6 +15,8 @@ const DEFAULT_SIM_STATE = {
   socketStates: {},
   protectedPhaseSet: new Set(),
   protectedNeutralSet: new Set(),
+  loadData: {}, // { compId: { currentA, powerW, isPowered } }
+  deviceLoads: {}, // { compId: totalA }
 };
 
 export const useEditorStore = create(
@@ -26,8 +29,10 @@ export const useEditorStore = create(
       hoveredTerminal: null,
       draftWire: null,
       simulationState: DEFAULT_SIM_STATE,
-      messages: [], // { id, text, type: 'error'|'info' }
+      messages: [], 
       
+      mainsVoltage: 230,
+
       // Guided Mode State
       mode: 'SANDBOX', 
       activeLessonId: 'L0',
@@ -40,18 +45,27 @@ export const useEditorStore = create(
         y: 0,
       },
 
+      setMainsVoltage: (v) => {
+          set({ mainsVoltage: Number(v) });
+          get()._evaluate();
+      },
+
       // --- Helper to trigger evaluation ---
       _evaluate: () => {
-        let { components, wires, mode, activeLessonId } = get();
+        let { components, wires, mode, activeLessonId, mainsVoltage } = get();
         
         // 1. Compute Network State (Energization)
         let simState = evaluateNetwork(components, wires);
         
-        // 2. Check Faults & Trip Devices
+        // 2. Compute Loads
+        const { loadData, deviceLoads } = evaluateLoads(components, wires, simState, mainsVoltage);
+        simState.loadData = loadData;
+        simState.deviceLoads = deviceLoads;
+
+        // 3. Check Faults & Trip Devices
         const trips = evaluateFaults(components, wires, simState);
         
         if (trips.length > 0) {
-            // Apply trips
             const newComponents = components.map(c => {
                 const trip = trips.find(t => t.id === c.id);
                 if (trip) {
@@ -60,7 +74,6 @@ export const useEditorStore = create(
                 return c;
             });
 
-            // Add messages
             const newMessages = trips.map(t => ({ id: nanoid(), text: t.msg, type: 'error' }));
             
             set(state => ({
@@ -68,9 +81,13 @@ export const useEditorStore = create(
                 messages: [...state.messages, ...newMessages]
             }));
 
-            // Re-evaluate network since topology changed (switches opened)
+            // Re-evaluate network since topology changed
             simState = evaluateNetwork(newComponents, wires);
-            // We update local var for lesson validation below
+            // Re-calc loads for new state
+            const loadRes = evaluateLoads(newComponents, wires, simState, mainsVoltage);
+            simState.loadData = loadRes.loadData;
+            simState.deviceLoads = loadRes.deviceLoads;
+            
             components = newComponents;
         }
 
@@ -278,7 +295,6 @@ export const useEditorStore = create(
 
         if (!fromTerm || !toTerm) { set({ draftWire: null }); return; }
 
-        // Step-2 validation: Block cross-kind wiring (Step-6 relies on Fault Parts to bridge kinds)
         if (fromTerm.kind !== toTerm.kind) {
           console.warn(`Mismatch: ${fromTerm.kind} vs ${toTerm.kind}`);
           get().addMessage(`Cannot connect ${fromTerm.kind} to ${toTerm.kind}. Use a Fault Part if testing faults.`, 'error');
@@ -342,6 +358,7 @@ export const useEditorStore = create(
           mode: state.mode,
           activeLessonId: state.activeLessonId,
           stage: state.stage,
+          mainsVoltage: state.mainsVoltage, // Persist voltage
       }),
       onRehydrateStorage: () => (state) => {
           if (state) {

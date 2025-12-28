@@ -13,6 +13,9 @@ export const PropertiesPanel = () => {
   const deleteWire = useEditorStore((state) => state.deleteWire);
   const simulationState = useEditorStore((state) => state.simulationState);
 
+  // Computed data
+  const { loadData, deviceLoads } = simulationState;
+
   // Case 1: Wire Selected
   if (selectedWireId) {
     const wire = wires.find(w => w.id === selectedWireId);
@@ -68,8 +71,12 @@ export const PropertiesPanel = () => {
     });
   };
 
+  const isLoad = selectedComponent.type === COMPONENT_TYPES.LAMP || selectedComponent.type === COMPONENT_TYPES.GENERIC_LOAD;
+  const isBreaker = selectedComponent.type === COMPONENT_TYPES.MCB || selectedComponent.type === COMPONENT_TYPES.RCBO;
+  const isRCCB = selectedComponent.type === COMPONENT_TYPES.RCCB;
+
   return (
-    <div className="w-72 bg-gray-800 border-l border-gray-700 flex flex-col p-4">
+    <div className="w-72 bg-gray-800 border-l border-gray-700 flex flex-col p-4 overflow-y-auto">
       <h2 className="text-gray-200 font-bold mb-4 uppercase text-xs tracking-wider">Component Properties</h2>
 
       <div className="mb-6">
@@ -89,21 +96,82 @@ export const PropertiesPanel = () => {
           />
         </div>
 
+        {/* Load Properties */}
+        {isLoad && (
+            <div className="p-3 bg-gray-900 rounded border border-gray-700 space-y-3">
+                <div className="text-xs font-bold text-gray-400 uppercase tracking-wider">Electrical Load</div>
+                
+                <div className="space-y-1">
+                    <label className="text-xs text-gray-400 block">Power (Watts)</label>
+                    <input
+                        type="number"
+                        min="0"
+                        value={selectedComponent.properties.powerW || 0}
+                        onChange={(e) => handlePropChange('powerW', parseFloat(e.target.value))}
+                        className="w-full bg-gray-800 border border-gray-600 rounded px-2 py-1 text-white"
+                    />
+                </div>
+
+                <div className="grid grid-cols-2 gap-2 text-xs">
+                    <div>
+                        <span className="text-gray-500 block">Current</span>
+                        <span className="text-green-400 font-mono text-lg">
+                            {loadData?.[selectedComponent.id]?.currentA.toFixed(2) || '0.00'} A
+                        </span>
+                    </div>
+                    <div>
+                        <span className="text-gray-500 block">Resistance</span>
+                        <span className="text-gray-300 font-mono text-lg">
+                            {loadData?.[selectedComponent.id]?.resistance.toFixed(0) || '∞'} Ω
+                        </span>
+                    </div>
+                </div>
+                
+                <div className={`text-xs font-bold ${loadData?.[selectedComponent.id]?.isPowered ? 'text-green-500' : 'text-gray-500'}`}>
+                    STATUS: {loadData?.[selectedComponent.id]?.isPowered ? 'POWERED' : 'OFF'}
+                </div>
+            </div>
+        )}
+
+        {/* Breaker Load Info */}
+        {(isBreaker || isRCCB) && (
+             <div className="p-3 bg-gray-900 rounded border border-gray-700 space-y-2">
+                <div className="text-xs font-bold text-gray-400 uppercase tracking-wider">Circuit Load</div>
+                <div className="flex justify-between items-end">
+                    <span className="text-gray-400 text-xs">Total Current</span>
+                    <span className="text-yellow-400 font-mono text-xl">
+                        {(deviceLoads?.[selectedComponent.id] || 0).toFixed(2)} A
+                    </span>
+                </div>
+                
+                {/* Overload Check */}
+                {(() => {
+                    const current = deviceLoads?.[selectedComponent.id] || 0;
+                    const ratingStr = selectedComponent.properties.rating || "0";
+                    const rating = parseFloat(ratingStr); // extracts 16 from "16A"
+                    if (current > rating && !isNaN(rating) && rating > 0) {
+                        return (
+                            <div className="bg-red-900/50 border border-red-700 text-red-200 px-2 py-1 rounded text-xs mt-2 font-bold animate-pulse">
+                                ⚠️ OVERLOAD WARNING ({current.toFixed(1)}A &gt; {rating}A)
+                            </div>
+                        );
+                    }
+                    return null;
+                })()}
+             </div>
+        )}
+
         {/* Specific Properties based on Type */}
-        {(selectedComponent.type === COMPONENT_TYPES.MCB || 
-          selectedComponent.type === COMPONENT_TYPES.SWITCH || 
-          selectedComponent.type === COMPONENT_TYPES.RCCB || 
-          selectedComponent.type === COMPONENT_TYPES.RCBO) && (
+        {(isBreaker || isRCCB || selectedComponent.type === COMPONENT_TYPES.SWITCH) && (
            <div className="flex items-center justify-between p-2 bg-gray-700 rounded">
               <span className="text-gray-200 text-sm">Switch State</span>
               <button
                 onClick={() => {
-                    // Reset trip if toggling
                     let newState = !selectedComponent.properties.isOn;
                     let updates = { isOn: newState };
                     if (selectedComponent.properties.isTripped) {
-                        updates.isTripped = false; // Reset trip
-                        updates.isOn = true; // Force ON or whatever logic desired
+                        updates.isTripped = false; 
+                        updates.isOn = true; 
                     }
                     handlePropChange('isOn', newState);
                     if (selectedComponent.properties.isTripped) handlePropChange('isTripped', false);
@@ -120,18 +188,26 @@ export const PropertiesPanel = () => {
         )}
 
         {selectedComponent.type === COMPONENT_TYPES.SUPPLY && (
-           <div className="flex items-center justify-between p-2 bg-gray-700 rounded">
-              <span className="text-gray-200 text-sm">Mains Power</span>
-              <button
-                onClick={() => handlePropChange('enabled', !selectedComponent.properties.enabled)}
-                className={`px-3 py-1 rounded text-xs font-bold ${
-                    selectedComponent.properties.enabled 
-                    ? 'bg-green-600 text-white' 
-                    : 'bg-gray-600 text-gray-300'
-                }`}
-              >
-                {selectedComponent.properties.enabled ? 'ENABLED' : 'DISABLED'}
-              </button>
+           <div className="space-y-2">
+               <div className="flex items-center justify-between p-2 bg-gray-700 rounded">
+                  <span className="text-gray-200 text-sm">Mains Power</span>
+                  <button
+                    onClick={() => handlePropChange('enabled', !selectedComponent.properties.enabled)}
+                    className={`px-3 py-1 rounded text-xs font-bold ${
+                        selectedComponent.properties.enabled 
+                        ? 'bg-green-600 text-white' 
+                        : 'bg-gray-600 text-gray-300'
+                    }`}
+                  >
+                    {selectedComponent.properties.enabled ? 'ENABLED' : 'DISABLED'}
+                  </button>
+               </div>
+               <div className="p-2 bg-gray-900 rounded border border-gray-700">
+                   <div className="text-gray-400 text-xs">Total System Load</div>
+                   <div className="text-yellow-400 font-mono text-xl">
+                       {(deviceLoads?.['TOTAL_MAINS'] || 0).toFixed(2)} A
+                   </div>
+               </div>
            </div>
         )}
         
@@ -157,15 +233,18 @@ export const PropertiesPanel = () => {
             </div>
         )}
 
-        <div className="space-y-1">
-          <label className="text-xs text-gray-400 block">Rating</label>
-          <input
-            type="text"
-            value={selectedComponent.properties.rating || ''}
-            onChange={(e) => handlePropChange('rating', e.target.value)}
-            className="w-full bg-gray-900 border border-gray-600 rounded px-3 py-2 text-gray-200 focus:outline-none focus:border-blue-500"
-          />
-        </div>
+        {/* Rating Field (for non-loads usually, but we keep generic if needed) */}
+        {!isLoad && selectedComponent.properties.rating !== undefined && (
+            <div className="space-y-1">
+              <label className="text-xs text-gray-400 block">Rating</label>
+              <input
+                type="text"
+                value={selectedComponent.properties.rating || ''}
+                onChange={(e) => handlePropChange('rating', e.target.value)}
+                className="w-full bg-gray-900 border border-gray-600 rounded px-3 py-2 text-gray-200 focus:outline-none focus:border-blue-500"
+              />
+            </div>
+        )}
       </div>
 
       <div className="mt-8 pt-4 border-t border-gray-700">

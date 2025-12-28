@@ -9,12 +9,25 @@ export const EditorShell = () => {
   const messages = useEditorStore((state) => state.messages);
   const dismissMessage = useEditorStore((state) => state.dismissMessage);
   const resetAllTrips = useEditorStore((state) => state.resetAllTrips);
+  const mainsVoltage = useEditorStore((state) => state.mainsVoltage);
+  const setMainsVoltage = useEditorStore((state) => state.setMainsVoltage);
 
   return (
     <div className="flex h-screen w-screen bg-gray-900 text-white overflow-hidden relative">
       <Toolbox />
       
       <div className="flex-1 relative flex flex-col h-full overflow-hidden">
+         {/* Settings Overlay */}
+         <div className="absolute top-4 right-4 z-50 bg-gray-800 p-2 rounded border border-gray-600 flex items-center gap-2 shadow-lg">
+            <label className="text-xs font-bold text-gray-400">Mains (V)</label>
+            <input 
+                type="number" 
+                value={mainsVoltage} 
+                onChange={(e) => setMainsVoltage(e.target.value)}
+                className="w-16 bg-gray-900 border border-gray-700 rounded px-2 py-1 text-sm text-white focus:outline-none focus:border-blue-500"
+            />
+         </div>
+
          {/* Message Banner Area */}
          {messages.length > 0 && (
              <div className="absolute top-4 left-1/2 transform -translate-x-1/2 z-50 flex flex-col space-y-2 w-auto max-w-xl">
@@ -35,7 +48,6 @@ export const EditorShell = () => {
                      </div>
                  ))}
                  
-                 {/* Only show Reset button if there are errors (trips) */}
                  {messages.some(m => m.type === 'error') && (
                      <button 
                         onClick={resetAllTrips}

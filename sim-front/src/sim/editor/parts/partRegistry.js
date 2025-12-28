@@ -13,6 +13,7 @@ import { RCBO } from './RCBO';
 import { FaultShortLN } from './FaultShortLN';
 import { FaultLeakLE } from './FaultLeakLE';
 import { HumanBody } from './HumanBody';
+import { GenericLoad } from './GenericLoad';
 
 export const PART_REGISTRY = {
   [COMPONENT_TYPES.SUPPLY]: {
@@ -143,10 +144,20 @@ export const PART_REGISTRY = {
   [COMPONENT_TYPES.LAMP]: {
     name: 'Lamp Load',
     component: Lamp,
-    defaultProperties: { label: 'L-1' },
+    defaultProperties: { label: 'L-1', powerW: 60 },
     terminals: [
       { id: 'L', kind: TERMINAL_KINDS.PHASE, relX: -10, relY: 25, label: 'L' },
       { id: 'N', kind: TERMINAL_KINDS.NEUTRAL, relX: 10, relY: 25, label: 'N' },
+    ],
+  },
+  [COMPONENT_TYPES.GENERIC_LOAD]: {
+    name: 'Generic Load',
+    component: GenericLoad,
+    defaultProperties: { label: 'LOAD-1', powerW: 1000 },
+    terminals: [
+      { id: 'L', kind: TERMINAL_KINDS.PHASE, relX: -15, relY: 25, label: 'L' },
+      { id: 'N', kind: TERMINAL_KINDS.NEUTRAL, relX: 0, relY: 25, label: 'N' },
+      { id: 'E', kind: TERMINAL_KINDS.EARTH, relX: 15, relY: 25, label: 'E' },
     ],
   },
   [COMPONENT_TYPES.SOCKET]: {

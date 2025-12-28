@@ -1,19 +1,19 @@
 import React from 'react';
-import { Group, Circle, Rect, Text } from 'react-konva';
+import { Group, Rect, Text } from 'react-konva';
 import { PART_REGISTRY } from './partRegistry';
 import { useEditorStore } from '../store';
 import { Terminal } from '../components/Terminal';
 
-export const Lamp = ({ id, type, x, y, isSelected, properties, onSelect, onDragEnd }) => {
+export const GenericLoad = ({ id, type, x, y, isSelected, properties, onSelect, onDragEnd }) => {
   const registryItem = PART_REGISTRY[type];
   const hoveredTerminal = useEditorStore((state) => state.hoveredTerminal);
   const setHoveredTerminal = useEditorStore((state) => state.setHoveredTerminal);
   const simulationState = useEditorStore((state) => state.simulationState);
-
-  // Load Data
+  
+  // Computed values from simulation state
   const loadInfo = simulationState.loadData?.[id];
-  const isLit = loadInfo?.isPowered;
   const currentA = loadInfo?.currentA || 0;
+  const isPowered = loadInfo?.isPowered;
 
   return (
     <Group
@@ -28,70 +28,72 @@ export const Lamp = ({ id, type, x, y, isSelected, properties, onSelect, onDragE
       {/* Selection Highlight */}
       {isSelected && (
         <Rect
-          width={50}
-          height={60}
+          width={70}
+          height={70}
           stroke="#00A3FF"
           strokeWidth={2}
-          offset={{ x: 25, y: 30 }}
+          offset={{ x: 35, y: 35 }}
         />
       )}
 
-      {/* Base */}
+      {/* Body */}
       <Rect
-        x={-10}
-        y={10}
-        width={20}
-        height={15}
-        fill="#9CA3AF"
-        stroke="#4B5563"
+        width={60}
+        height={60}
+        fill="#4B5563"
+        stroke="#1F2937"
         strokeWidth={1}
+        cornerRadius={4}
+        offset={{ x: 30, y: 30 }}
+        shadowColor="black"
+        shadowBlur={2}
+        shadowOpacity={0.2}
+        shadowOffset={{ x: 1, y: 1 }}
       />
 
-      {/* Bulb */}
-      <Circle
-        y={-5}
-        radius={20}
-        fill={isLit ? '#FCD34D' : '#F3F4F6'} 
-        stroke="#D1D5DB"
-        strokeWidth={1}
-        shadowColor={isLit ? '#FCD34D' : 'transparent'}
-        shadowBlur={20}
-        shadowOpacity={0.8}
-      />
-      
       {/* Label */}
       <Text
-        text={properties.label}
+        text={properties.label || "Load"}
         fontSize={10}
-        y={30}
-        width={50}
-        offsetX={25}
+        y={-20}
+        width={60}
+        offsetX={30}
         align="center"
         fill="#E5E7EB"
         listening={false}
       />
 
-      {/* Info Overlay */}
-      {isLit && (
-          <Text
-            text={`${currentA.toFixed(2)}A`}
-            fontSize={8}
-            y={-5}
-            width={40}
-            offsetX={20}
-            align="center"
-            fill="#78350F"
-            fontStyle="bold"
-            listening={false}
-          />
-      )}
+      {/* Stats */}
+      <Text
+        text={`${properties.powerW}W`}
+        fontSize={10}
+        fontStyle="bold"
+        y={-5}
+        width={60}
+        offsetX={30}
+        align="center"
+        fill="#FBBF24"
+        listening={false}
+      />
+      
+      <Text
+        text={isPowered ? `${currentA.toFixed(2)}A` : "OFF"}
+        fontSize={10}
+        y={10}
+        width={60}
+        offsetX={30}
+        align="center"
+        fill={isPowered ? "#34D399" : "#9CA3AF"}
+        listening={false}
+      />
 
       {/* Terminals */}
       {registryItem.terminals.map((t) => {
         const terminalIdStr = `${id}:${t.id}`;
         let isEnergized = false;
-        if (t.id === 'L') isEnergized = simulationState.livePhaseSet.has(terminalIdStr);
-        if (t.id === 'N') isEnergized = simulationState.neutralSet.has(terminalIdStr);
+        if (t.kind === 'PHASE') isEnergized = simulationState.livePhaseSet.has(terminalIdStr);
+        if (t.kind === 'NEUTRAL') isEnergized = simulationState.neutralSet.has(terminalIdStr);
+        if (t.kind === 'EARTH') isEnergized = simulationState.earthSet.has(terminalIdStr);
 
         return (
           <Terminal
