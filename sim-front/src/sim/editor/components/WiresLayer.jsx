@@ -2,7 +2,7 @@ import React from 'react';
 import { Group, Line } from 'react-konva';
 import { useEditorStore } from '../store';
 import { getTerminalPos } from '../utils';
-import { PART_REGISTRY } from '../parts/partRegistry';
+import { PART_DEFINITIONS as PART_REGISTRY } from '../parts/partDefinitions';
 import { TERMINAL_KINDS } from '../types';
 
 export const WiresLayer = () => {

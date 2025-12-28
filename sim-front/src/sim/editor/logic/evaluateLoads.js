@@ -1,23 +1,25 @@
 import { COMPONENT_TYPES, TERMINAL_KINDS } from '../types';
-import { PART_REGISTRY } from '../parts/partRegistry';
+import { PART_DEFINITIONS as PART_REGISTRY } from '../parts/partDefinitions';
 
 /**
- * Calculates current draw and load distribution.
+ * Calculates current draw and load distribution with Power Factor.
  * 
  * @param {Array} components 
  * @param {Array} wires 
  * @param {Object} simulationState { livePhaseSet, neutralSet }
  * @param {Number} mainsVoltage
- * @returns {Object} { loadData: { compId: { currentA, powerW, isPowered } }, deviceLoads: { compId: totalA }, totalSystemPowerW: number }
+ * @returns {Object} { loadData, deviceLoads, totalSystemPowerW }
  */
 export const evaluateLoads = (components, wires, simulationState, mainsVoltage) => {
-  const loadData = {}; // Per load component
-  const deviceLoads = { 'TOTAL_MAINS': 0 }; // Per protection device + total
+  const loadData = {}; 
+  const deviceLoads = { 
+      'TOTAL_MAINS': { I_real: 0, I_imag: 0, currentA: 0, P: 0, S: 0, Q: 0 } 
+  }; 
   let totalSystemPowerW = 0;
 
   const { livePhaseSet, neutralSet } = simulationState;
 
-  // 1. Build Phase Graph for Upstream Tracing
+  // 1. Build Phase Graph
   const phaseGraph = new Map();
   wires.forEach(w => {
       const u = `${w.from.compId}:${w.from.terminalId}`;
@@ -28,12 +30,11 @@ export const evaluateLoads = (components, wires, simulationState, mainsVoltage) 
       phaseGraph.get(v).push(u);
   });
 
-  // Add internal connections for CLOSED devices to allow tracing through them
   components.forEach(c => {
       const isClosed = (c.properties.isOn && !c.properties.isTripped);
       if (c.type === COMPONENT_TYPES.MCB && isClosed) addInternal(phaseGraph, c.id, 'LOUT', 'LIN');
       else if ((c.type === COMPONENT_TYPES.RCCB || c.type === COMPONENT_TYPES.RCBO) && isClosed) addInternal(phaseGraph, c.id, 'L_OUT', 'L_IN');
-      else if (c.type === COMPONENT_TYPES.SWITCH && c.properties.isOn) addInternal(phaseGraph, c.id, 'OUT_L', 'IN_L'); // Switch direction? usually IN->OUT
+      else if (c.type === COMPONENT_TYPES.SWITCH && c.properties.isOn) addInternal(phaseGraph, c.id, 'OUT_L', 'IN_L');
       else if (c.type === COMPONENT_TYPES.METER) addInternal(phaseGraph, c.id, 'OUT_L', 'IN_L');
       else if (c.type === COMPONENT_TYPES.BUSBAR) {
           const terms = PART_REGISTRY[c.type].terminals;
@@ -50,34 +51,60 @@ export const evaluateLoads = (components, wires, simulationState, mainsVoltage) 
       graph.get(v).push(u);
   }
 
-  // 2. Identify Loads and Calculate Current
+  // 2. Identify Loads
   components.forEach(comp => {
-      if (comp.type === COMPONENT_TYPES.LAMP || comp.type === COMPONENT_TYPES.GENERIC_LOAD) {
-          const powerW = comp.properties.powerW || 0;
+      if ([COMPONENT_TYPES.LAMP, COMPONENT_TYPES.GENERIC_LOAD, COMPONENT_TYPES.FAN, COMPONENT_TYPES.AC, COMPONENT_TYPES.HEATER].includes(comp.type)) {
+          const P = comp.properties.powerW || 0;
+          const pf = comp.properties.powerFactor || 1.0;
+          const type = comp.properties.loadType || 'RESISTIVE';
+          
           const termL = `${comp.id}:L`;
           const termN = `${comp.id}:N`;
           
           const isPowered = livePhaseSet.has(termL) && neutralSet.has(termN);
-          const currentA = isPowered ? (powerW / mainsVoltage) : 0;
+          
+          // Calculations
+          const S = isPowered ? P / pf : 0;
+          const I = isPowered ? S / mainsVoltage : 0;
+          let Q = isPowered ? Math.sqrt(Math.max(0, S*S - P*P)) : 0;
+          
+          if (type === 'CAPACITIVE') Q = -Q;
+
+          // Components of Current
+          // I_real = I * pf
+          // I_imag = I * sin(acos(pf)) ... approx Q/V
+          const I_real = isPowered ? (P / mainsVoltage) : 0;
+          const I_imag = isPowered ? (Q / mainsVoltage) : 0;
 
           loadData[comp.id] = {
-              currentA,
-              powerW,
+              currentA: I,
+              powerW: P,
+              apparentVA: S,
+              reactiveVAR: Q,
+              powerFactor: pf,
               isPowered,
-              resistance: powerW > 0 ? (mainsVoltage * mainsVoltage / powerW) : Infinity
+              I_real,
+              I_imag
           };
 
           if (isPowered) {
-              totalSystemPowerW += powerW; // Accumulate Wattage
-              if (currentA > 0) {
-                  deviceLoads['TOTAL_MAINS'] = (deviceLoads['TOTAL_MAINS'] || 0) + currentA;
-                  
-                  // 3. Attribute load to upstream breakers
-                  const breakers = findUpstreamBreakers(termL, phaseGraph, components);
-                  breakers.forEach(bId => {
-                      deviceLoads[bId] = (deviceLoads[bId] || 0) + currentA;
-                  });
-              }
+              totalSystemPowerW += P;
+              
+              const addToDevice = (id) => {
+                  if (!deviceLoads[id]) deviceLoads[id] = { I_real: 0, I_imag: 0, currentA: 0, P: 0, S: 0, Q: 0 };
+                  deviceLoads[id].I_real += I_real;
+                  deviceLoads[id].I_imag += I_imag;
+                  deviceLoads[id].P += P;
+                  deviceLoads[id].Q += Q;
+                  // Recompute RMS magnitude
+                  deviceLoads[id].currentA = Math.sqrt(deviceLoads[id].I_real**2 + deviceLoads[id].I_imag**2);
+                  deviceLoads[id].S = Math.sqrt(deviceLoads[id].P**2 + deviceLoads[id].Q**2);
+              };
+
+              addToDevice('TOTAL_MAINS');
+              
+              const breakers = findUpstreamBreakers(termL, phaseGraph, components);
+              breakers.forEach(bId => addToDevice(bId));
           }
       }
   });
@@ -85,7 +112,6 @@ export const evaluateLoads = (components, wires, simulationState, mainsVoltage) 
   return { loadData, deviceLoads, totalSystemPowerW };
 };
 
-// BFS to find ALL upstream protection devices
 function findUpstreamBreakers(startNode, graph, components) {
     const breakers = new Set();
     const queue = [startNode];
@@ -97,14 +123,11 @@ function findUpstreamBreakers(startNode, graph, components) {
         const [compId, termId] = current.split(':');
         const comp = components.find(c => c.id === compId);
 
-        // Check if we just traversed OUT of a breaker (meaning we entered its OUTPUT side)
-        // This logic is tricky with undirected graph. 
-        // We need to know if we are "passing through" or just "touching".
-        // Actually, if we are at the OUTPUT terminal of a breaker, then that breaker feeds this point.
         if (comp) {
-            if (comp.type === COMPONENT_TYPES.MCB && termId === 'LOUT') breakers.add(comp.id);
-            if (comp.type === COMPONENT_TYPES.RCBO && termId === 'L_OUT') breakers.add(comp.id);
-            if (comp.type === COMPONENT_TYPES.RCCB && termId === 'L_OUT') breakers.add(comp.id);
+            if ((comp.type === COMPONENT_TYPES.MCB || comp.type === COMPONENT_TYPES.RCCB || comp.type === COMPONENT_TYPES.RCBO) 
+                && (termId === 'LOUT' || termId === 'L_OUT')) {
+                breakers.add(comp.id);
+            }
         }
 
         const neighbors = graph.get(current) || [];

@@ -1,7 +1,7 @@
 import React from 'react';
 import { useEditorStore } from '../store';
 import { COMPONENT_TYPES } from '../types';
-import { PART_REGISTRY } from '../parts/partRegistry';
+import { PART_DEFINITIONS as PART_REGISTRY } from '../parts/partDefinitions';
 
 export const Toolbox = () => {
   const addComponent = useEditorStore((state) => state.addComponent);

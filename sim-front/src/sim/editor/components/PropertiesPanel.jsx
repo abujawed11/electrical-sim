@@ -1,7 +1,7 @@
 import React from 'react';
 import { useEditorStore } from '../store';
-import { PART_REGISTRY } from '../parts/partRegistry';
-import { COMPONENT_TYPES } from '../types';
+import { PART_DEFINITIONS as PART_REGISTRY } from '../parts/partDefinitions';
+import { COMPONENT_TYPES, LOAD_TYPES } from '../types';
 
 export const PropertiesPanel = () => {
   const selectedId = useEditorStore((state) => state.selectedId);
@@ -71,7 +71,7 @@ export const PropertiesPanel = () => {
     });
   };
 
-  const isLoad = selectedComponent.type === COMPONENT_TYPES.LAMP || selectedComponent.type === COMPONENT_TYPES.GENERIC_LOAD;
+  const isLoad = [COMPONENT_TYPES.LAMP, COMPONENT_TYPES.GENERIC_LOAD, COMPONENT_TYPES.FAN, COMPONENT_TYPES.AC, COMPONENT_TYPES.HEATER].includes(selectedComponent.type);
   const isBreaker = selectedComponent.type === COMPONENT_TYPES.MCB || selectedComponent.type === COMPONENT_TYPES.RCBO;
   const isRCCB = selectedComponent.type === COMPONENT_TYPES.RCCB;
 
@@ -112,17 +112,48 @@ export const PropertiesPanel = () => {
                     />
                 </div>
 
-                <div className="grid grid-cols-2 gap-2 text-xs">
+                <div className="grid grid-cols-2 gap-2">
+                    <div className="space-y-1">
+                        <label className="text-xs text-gray-400 block">Power Factor</label>
+                        <input
+                            type="number"
+                            min="0.1"
+                            max="1.0"
+                            step="0.05"
+                            value={selectedComponent.properties.powerFactor || 1.0}
+                            onChange={(e) => handlePropChange('powerFactor', parseFloat(e.target.value))}
+                            className="w-full bg-gray-800 border border-gray-600 rounded px-2 py-1 text-white"
+                        />
+                    </div>
+                    <div className="space-y-1">
+                        <label className="text-xs text-gray-400 block">Type</label>
+                        <select
+                            value={selectedComponent.properties.loadType || LOAD_TYPES.RESISTIVE}
+                            onChange={(e) => handlePropChange('loadType', e.target.value)}
+                            className="w-full bg-gray-800 border border-gray-600 rounded px-2 py-1 text-white text-xs"
+                        >
+                            {Object.values(LOAD_TYPES).map(t => <option key={t} value={t}>{t}</option>)}
+                        </select>
+                    </div>
+                </div>
+
+                <div className="grid grid-cols-2 gap-2 text-xs pt-2 border-t border-gray-700">
                     <div>
-                        <span className="text-gray-500 block">Current</span>
+                        <span className="text-gray-500 block">Current (I)</span>
                         <span className="text-green-400 font-mono text-lg">
                             {loadData?.[selectedComponent.id]?.currentA.toFixed(2) || '0.00'} A
                         </span>
                     </div>
                     <div>
-                        <span className="text-gray-500 block">Resistance</span>
-                        <span className="text-gray-300 font-mono text-lg">
-                            {loadData?.[selectedComponent.id]?.resistance.toFixed(0) || '∞'} Ω
+                        <span className="text-gray-500 block">Apparent (S)</span>
+                        <span className="text-yellow-400 font-mono">
+                            {loadData?.[selectedComponent.id]?.apparentVA.toFixed(0) || '0'} VA
+                        </span>
+                    </div>
+                    <div>
+                        <span className="text-gray-500 block">Reactive (Q)</span>
+                        <span className="text-blue-400 font-mono">
+                            {loadData?.[selectedComponent.id]?.reactiveVAR.toFixed(0) || '0'} VAR
                         </span>
                     </div>
                 </div>
@@ -140,15 +171,20 @@ export const PropertiesPanel = () => {
                 <div className="flex justify-between items-end">
                     <span className="text-gray-400 text-xs">Total Current</span>
                     <span className="text-yellow-400 font-mono text-xl">
-                        {(deviceLoads?.[selectedComponent.id] || 0).toFixed(2)} A
+                        {(deviceLoads?.[selectedComponent.id]?.currentA || 0).toFixed(2)} A
                     </span>
                 </div>
                 
+                <div className="grid grid-cols-2 gap-2 text-xs text-gray-400">
+                    <div>P: {(deviceLoads?.[selectedComponent.id]?.P || 0).toFixed(0)} W</div>
+                    <div>S: {(deviceLoads?.[selectedComponent.id]?.S || 0).toFixed(0)} VA</div>
+                </div>
+
                 {/* Overload Check */}
                 {(() => {
-                    const current = deviceLoads?.[selectedComponent.id] || 0;
+                    const current = deviceLoads?.[selectedComponent.id]?.currentA || 0;
                     const ratingStr = selectedComponent.properties.rating || "0";
-                    const rating = parseFloat(ratingStr); // extracts 16 from "16A"
+                    const rating = parseFloat(ratingStr); 
                     if (current > rating && !isNaN(rating) && rating > 0) {
                         return (
                             <div className="bg-red-900/50 border border-red-700 text-red-200 px-2 py-1 rounded text-xs mt-2 font-bold animate-pulse">
@@ -205,7 +241,11 @@ export const PropertiesPanel = () => {
                <div className="p-2 bg-gray-900 rounded border border-gray-700">
                    <div className="text-gray-400 text-xs">Total System Load</div>
                    <div className="text-yellow-400 font-mono text-xl">
-                       {(deviceLoads?.['TOTAL_MAINS'] || 0).toFixed(2)} A
+                       {(deviceLoads?.['TOTAL_MAINS']?.currentA || 0).toFixed(2)} A
+                   </div>
+                   <div className="grid grid-cols-2 gap-2 text-xs text-gray-400 mt-1">
+                        <div>{(deviceLoads?.['TOTAL_MAINS']?.P || 0).toFixed(0)} W</div>
+                        <div>{(deviceLoads?.['TOTAL_MAINS']?.S || 0).toFixed(0)} VA</div>
                    </div>
                </div>
            </div>
@@ -233,7 +273,7 @@ export const PropertiesPanel = () => {
             </div>
         )}
 
-        {/* Rating Field (for non-loads usually, but we keep generic if needed) */}
+        {/* Rating Field */}
         {!isLoad && selectedComponent.properties.rating !== undefined && (
             <div className="space-y-1">
               <label className="text-xs text-gray-400 block">Rating</label>

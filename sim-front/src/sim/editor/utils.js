@@ -1,4 +1,4 @@
-import { PART_REGISTRY } from './parts/partRegistry';
+import { PART_DEFINITIONS as PART_REGISTRY } from './parts/partDefinitions';
 
 export const getTerminalPos = (component, terminalId) => {
   if (!component) return { x: 0, y: 0 };

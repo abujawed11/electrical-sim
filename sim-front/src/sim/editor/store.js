@@ -1,7 +1,7 @@
 import { create } from 'zustand';
 import { persist, createJSONStorage } from 'zustand/middleware';
 import { nanoid } from 'nanoid';
-import { PART_REGISTRY } from './parts/partRegistry';
+import { PART_DEFINITIONS as PART_REGISTRY } from './parts/partDefinitions';
 import { evaluateNetwork } from './logic/evaluateNetwork';
 import { evaluateFaults } from './logic/evaluateFaults';
 import { evaluateLoads } from './logic/evaluateLoads';

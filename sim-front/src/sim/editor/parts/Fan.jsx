@@ -1,14 +1,18 @@
 import React from 'react';
-import { Group, Rect, Text } from 'react-konva';
+import { Group, Circle, Text, Rect } from 'react-konva';
 import { PART_DEFINITIONS as PART_REGISTRY } from './partDefinitions';
 import { useEditorStore } from '../store';
 import { Terminal } from '../components/Terminal';
 
-export const FaultLeakLE = ({ id, type, x, y, isSelected, onSelect, onDragEnd }) => {
+export const Fan = ({ id, type, x, y, isSelected, onSelect, onDragEnd }) => {
   const registryItem = PART_REGISTRY[type];
   const hoveredTerminal = useEditorStore((state) => state.hoveredTerminal);
   const setHoveredTerminal = useEditorStore((state) => state.setHoveredTerminal);
   const simulationState = useEditorStore((state) => state.simulationState);
+  
+  const loadInfo = simulationState.loadData?.[id];
+  const isPowered = loadInfo?.isPowered;
+  const currentA = loadInfo?.currentA || 0;
 
   return (
     <Group
@@ -23,51 +27,42 @@ export const FaultLeakLE = ({ id, type, x, y, isSelected, onSelect, onDragEnd })
       {/* Selection Highlight */}
       {isSelected && (
         <Rect
-          width={50}
-          height={50}
+          width={60}
+          height={60}
           stroke="#00A3FF"
           strokeWidth={2}
-          offset={{ x: 25, y: 25 }}
+          offset={{ x: 30, y: 30 }}
         />
       )}
 
       {/* Body */}
-      <Rect
-        width={40}
-        height={40}
-        fill="#F59E0B"
-        stroke="#78350F"
-        strokeWidth={2}
-        cornerRadius={4}
-        offset={{ x: 20, y: 20 }}
+      <Circle
+        radius={25}
+        fill="#DDD6FE"
+        stroke="#4338CA"
+        strokeWidth={1}
         shadowColor="black"
         shadowBlur={2}
         shadowOpacity={0.2}
-        shadowOffset={{ x: 1, y: 1 }}
       />
       
-      {/* Warning Symbol */}
-      <Text
-        text="⚠️"
-        fontSize={20}
-        y={-10}
-        width={40}
-        offsetX={20}
-        align="center"
-        fill="white"
-        listening={false}
-      />
+      {/* Blades (Visual) */}
+      <Group rotation={isPowered ? 45 : 0}>
+         <Rect x={-4} y={-20} width={8} height={40} fill="#818CF8" cornerRadius={4} />
+         <Rect x={-20} y={-4} width={40} height={8} fill="#818CF8" cornerRadius={4} />
+      </Group>
 
+      {/* Stats */}
       <Text
-        text="LEAK L-E"
+        text={isPowered ? `${currentA.toFixed(2)}A` : "OFF"}
         fontSize={8}
-        y={8}
-        width={40}
-        offsetX={20}
+        y={5}
+        width={50}
+        offsetX={25}
         align="center"
-        fill="white"
-        fontStyle="bold"
+        fill="#374151"
         listening={false}
+        fontStyle="bold"
       />
 
       {/* Terminals */}
@@ -75,7 +70,7 @@ export const FaultLeakLE = ({ id, type, x, y, isSelected, onSelect, onDragEnd })
         const terminalIdStr = `${id}:${t.id}`;
         let isEnergized = false;
         if (t.kind === 'PHASE') isEnergized = simulationState.livePhaseSet.has(terminalIdStr);
-        if (t.kind === 'EARTH') isEnergized = simulationState.earthSet.has(terminalIdStr);
+        if (t.kind === 'NEUTRAL') isEnergized = simulationState.neutralSet.has(terminalIdStr);
 
         return (
           <Terminal

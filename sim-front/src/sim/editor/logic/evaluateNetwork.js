@@ -1,5 +1,5 @@
 import { COMPONENT_TYPES, TERMINAL_KINDS } from '../types';
-import { PART_REGISTRY } from '../parts/partRegistry';
+import { PART_DEFINITIONS as PART_REGISTRY } from '../parts/partDefinitions';
 
 /**
  * Recomputes the electrical network state.

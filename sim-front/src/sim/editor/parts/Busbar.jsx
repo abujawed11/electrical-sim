@@ -1,6 +1,6 @@
 import React from 'react';
 import { Group, Rect, Text } from 'react-konva';
-import { PART_REGISTRY } from './partRegistry';
+import { PART_DEFINITIONS as PART_REGISTRY } from './partDefinitions';
 import { useEditorStore } from '../store';
 import { Terminal } from '../components/Terminal';
 
