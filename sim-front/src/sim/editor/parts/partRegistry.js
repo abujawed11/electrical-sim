@@ -8,6 +8,8 @@ import { EarthBar } from './EarthBar';
 import { Busbar } from './Busbar';
 import { Switch } from './Switch';
 import { Lamp } from './Lamp';
+import { RCCB } from './RCCB';
+import { RCBO } from './RCBO';
 
 export const PART_REGISTRY = {
   [COMPONENT_TYPES.SUPPLY]: {
@@ -44,7 +46,7 @@ export const PART_REGISTRY = {
       id: `N${i + 1}`,
       kind: TERMINAL_KINDS.NEUTRAL,
       relX: 0,
-      relY: -60 + i * 24, // Vertically distributed
+      relY: -60 + i * 24, 
       label: `N${i + 1}`,
     })),
   },
@@ -86,6 +88,40 @@ export const PART_REGISTRY = {
     terminals: [
       { id: 'LIN', kind: TERMINAL_KINDS.PHASE, relX: 0, relY: -28, label: 'IN' },
       { id: 'LOUT', kind: TERMINAL_KINDS.PHASE, relX: 0, relY: 28, label: 'OUT' },
+    ],
+  },
+  [COMPONENT_TYPES.RCCB]: {
+    name: 'RCCB (ELCB)',
+    component: RCCB,
+    defaultProperties: {
+      label: 'RCCB',
+      rating: '63A',
+      sensitivity: '30mA',
+      isOn: true,
+      isTripped: false,
+    },
+    terminals: [
+      { id: 'L_IN', kind: TERMINAL_KINDS.PHASE, relX: -15, relY: -46, label: 'L-I' },
+      { id: 'N_IN', kind: TERMINAL_KINDS.NEUTRAL, relX: 15, relY: -46, label: 'N-I' },
+      { id: 'L_OUT', kind: TERMINAL_KINDS.PHASE, relX: -15, relY: 46, label: 'L-O' },
+      { id: 'N_OUT', kind: TERMINAL_KINDS.NEUTRAL, relX: 15, relY: 46, label: 'N-O' },
+    ],
+  },
+  [COMPONENT_TYPES.RCBO]: {
+    name: 'RCBO',
+    component: RCBO,
+    defaultProperties: {
+      label: 'RCBO',
+      rating: '20A',
+      sensitivity: '30mA',
+      isOn: true,
+      isTripped: false,
+    },
+    terminals: [
+      { id: 'L_IN', kind: TERMINAL_KINDS.PHASE, relX: -8, relY: -46, label: 'L-I' },
+      { id: 'N_IN', kind: TERMINAL_KINDS.NEUTRAL, relX: 8, relY: -46, label: 'N-I' },
+      { id: 'L_OUT', kind: TERMINAL_KINDS.PHASE, relX: -8, relY: 46, label: 'L-O' },
+      { id: 'N_OUT', kind: TERMINAL_KINDS.NEUTRAL, relX: 8, relY: 46, label: 'N-O' },
     ],
   },
   [COMPONENT_TYPES.SWITCH]: {

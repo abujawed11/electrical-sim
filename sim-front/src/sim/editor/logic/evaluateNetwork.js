@@ -6,9 +6,7 @@ import { PART_REGISTRY } from '../parts/partRegistry';
  * 
  * @param {Array} components - List of all components in the scene
  * @param {Array} wires - List of all wires
- * @returns {Object} { livePhaseSet, neutralSet, earthSet, socketStates }
- * 
- * Sets contain strings in the format: "${compId}:${terminalId}"
+ * @returns {Object} { livePhaseSet, neutralSet, earthSet, socketStates, protectedPhaseSet, protectedNeutralSet }
  */
 export const evaluateNetwork = (components, wires) => {
   const livePhaseSet = new Set();
@@ -16,7 +14,11 @@ export const evaluateNetwork = (components, wires) => {
   const earthSet = new Set();
   const socketStates = {};
 
-  // 1. Build Adjacency Graphs
+  // Sets for protection analysis
+  const protectedPhaseSet = new Set();
+  const protectedNeutralSet = new Set();
+
+  // 1. Build Adjacency Graphs (Full Connectivity)
   const phaseGraph = new Map();
   const neutralGraph = new Map();
   const earthGraph = new Map();
@@ -29,17 +31,14 @@ export const evaluateNetwork = (components, wires) => {
     graph.get(nodeB).push(nodeA);
   };
 
-  // Add Wire Connections (Topology)
+  // Add Wire Connections
   wires.forEach(wire => {
     const fromId = `${wire.from.compId}:${wire.from.terminalId}`;
     const toId = `${wire.to.compId}:${wire.to.terminalId}`;
-    
-    // Determine kind based on terminal definitions
     const comp = components.find(c => c.id === wire.from.compId);
     if (!comp) return;
     const registry = PART_REGISTRY[comp.type];
     const term = registry.terminals.find(t => t.id === wire.from.terminalId);
-    
     if (term) {
       if (term.kind === TERMINAL_KINDS.PHASE) addEdge(phaseGraph, fromId, toId);
       if (term.kind === TERMINAL_KINDS.NEUTRAL) addEdge(neutralGraph, fromId, toId);
@@ -48,45 +47,44 @@ export const evaluateNetwork = (components, wires) => {
   });
 
   // Add Internal Connections (Device Logic)
+  // We track RCCBs to handle protection logic later
+  const rccbList = [];
+
   components.forEach(comp => {
     const registryItem = PART_REGISTRY[comp.type];
     if (!registryItem) return;
 
     if (comp.type === COMPONENT_TYPES.MCB) {
-      if (comp.properties.isOn) {
-        addEdge(phaseGraph, `${comp.id}:LIN`, `${comp.id}:LOUT`);
-      }
-    } else if (comp.type === COMPONENT_TYPES.SWITCH) {
-      if (comp.properties.isOn) {
-        addEdge(phaseGraph, `${comp.id}:IN_L`, `${comp.id}:OUT_L`);
-      }
-    } else if (comp.type === COMPONENT_TYPES.METER) {
+      if (comp.properties.isOn) addEdge(phaseGraph, `${comp.id}:LIN`, `${comp.id}:LOUT`);
+    } 
+    else if (comp.type === COMPONENT_TYPES.SWITCH) {
+      if (comp.properties.isOn) addEdge(phaseGraph, `${comp.id}:IN_L`, `${comp.id}:OUT_L`);
+    } 
+    else if (comp.type === COMPONENT_TYPES.METER) {
       addEdge(phaseGraph, `${comp.id}:IN_L`, `${comp.id}:OUT_L`);
       addEdge(neutralGraph, `${comp.id}:IN_N`, `${comp.id}:OUT_N`);
-    } else if (comp.type === COMPONENT_TYPES.NEUTRAL_BAR) {
-      // Connect all N terminals together
-      const terms = registryItem.terminals;
-      for (let i = 0; i < terms.length - 1; i++) {
-        addEdge(neutralGraph, `${comp.id}:${terms[i].id}`, `${comp.id}:${terms[i+1].id}`);
+    } 
+    else if (comp.type === COMPONENT_TYPES.RCCB || comp.type === COMPONENT_TYPES.RCBO) {
+      rccbList.push(comp);
+      if (comp.properties.isOn && !comp.properties.isTripped) {
+         addEdge(phaseGraph, `${comp.id}:L_IN`, `${comp.id}:L_OUT`);
+         addEdge(neutralGraph, `${comp.id}:N_IN`, `${comp.id}:N_OUT`);
       }
-    } else if (comp.type === COMPONENT_TYPES.EARTH_BAR) {
-      // Connect all E terminals together
+    }
+    else if (comp.type === COMPONENT_TYPES.NEUTRAL_BAR) {
       const terms = registryItem.terminals;
-      for (let i = 0; i < terms.length - 1; i++) {
-        addEdge(earthGraph, `${comp.id}:${terms[i].id}`, `${comp.id}:${terms[i+1].id}`);
-      }
-    } else if (comp.type === COMPONENT_TYPES.BUSBAR) {
-      // Connect IN to all OUTs (chain them or star)
-      // Let's star them from IN for simplicity or chain. 
-      // Chaining is safer against recursion depth if many nodes? Not really.
-      // Star from IN:
+      for (let i = 0; i < terms.length - 1; i++) addEdge(neutralGraph, `${comp.id}:${terms[i].id}`, `${comp.id}:${terms[i+1].id}`);
+    } 
+    else if (comp.type === COMPONENT_TYPES.EARTH_BAR) {
+      const terms = registryItem.terminals;
+      for (let i = 0; i < terms.length - 1; i++) addEdge(earthGraph, `${comp.id}:${terms[i].id}`, `${comp.id}:${terms[i+1].id}`);
+    } 
+    else if (comp.type === COMPONENT_TYPES.BUSBAR) {
       const terms = registryItem.terminals;
       const inT = terms.find(t => t.id === 'IN');
       if (inT) {
          terms.forEach(t => {
-            if (t.id !== 'IN') {
-               addEdge(phaseGraph, `${comp.id}:IN`, `${comp.id}:${t.id}`);
-            }
+            if (t.id !== 'IN') addEdge(phaseGraph, `${comp.id}:IN`, `${comp.id}:${t.id}`);
          });
       }
     }
@@ -105,15 +103,13 @@ export const evaluateNetwork = (components, wires) => {
     earthSources.push(`${supply.id}:E`);
   });
 
-  // 3. BFS Propagation
+  // 3. BFS Propagation (Energization)
   const propagate = (sources, graph, resultSets) => {
     const queue = [...sources];
     sources.forEach(s => resultSets.add(s));
-
     while (queue.length > 0) {
       const current = queue.shift();
       const neighbors = graph.get(current) || [];
-      
       neighbors.forEach(next => {
         if (!resultSets.has(next)) {
           resultSets.add(next);
@@ -127,22 +123,104 @@ export const evaluateNetwork = (components, wires) => {
   propagate(neutralSources, neutralGraph, neutralSet);
   propagate(earthSources, earthGraph, earthSet);
 
-  // 4. Compute Socket States (and maybe Lamp states if we want to export them, but they calculate locally)
+  // 4. Protection Analysis (Isolated Graph)
+  // We perform BFS starting from RCCB Outputs, but using a graph where RCCB internal edges are REMOVED.
+  // This tells us "What is downstream of RCCB".
+  // Note: We reuse the wire connections, but we must NOT use the RCCB internal edges we added above.
+  // Easiest way: Rebuild graph without RCCB internals, or just clone and remove? 
+  // Map clone is shallow. We need to copy array values. 
+  // Better: Just build a "protectionGraph" from wires + non-RCCB devices.
+  
+  const protPhaseGraph = new Map();
+  const protNeutralGraph = new Map();
+
+  // Add wires again
+  wires.forEach(wire => {
+    const fromId = `${wire.from.compId}:${wire.from.terminalId}`;
+    const toId = `${wire.to.compId}:${wire.to.terminalId}`;
+    const comp = components.find(c => c.id === wire.from.compId);
+    if (!comp) return;
+    const registry = PART_REGISTRY[comp.type];
+    const term = registry.terminals.find(t => t.id === wire.from.terminalId);
+    if (term) {
+      if (term.kind === TERMINAL_KINDS.PHASE) addEdge(protPhaseGraph, fromId, toId);
+      if (term.kind === TERMINAL_KINDS.NEUTRAL) addEdge(protNeutralGraph, fromId, toId);
+    }
+  });
+
+  // Add internal connections EXCEPT RCCB/RCBO
+  components.forEach(comp => {
+    const registryItem = PART_REGISTRY[comp.type];
+    if (!registryItem) return;
+
+    if (comp.type === COMPONENT_TYPES.MCB && comp.properties.isOn) addEdge(protPhaseGraph, `${comp.id}:LIN`, `${comp.id}:LOUT`);
+    else if (comp.type === COMPONENT_TYPES.SWITCH && comp.properties.isOn) addEdge(protPhaseGraph, `${comp.id}:IN_L`, `${comp.id}:OUT_L`);
+    else if (comp.type === COMPONENT_TYPES.METER) {
+      addEdge(protPhaseGraph, `${comp.id}:IN_L`, `${comp.id}:OUT_L`);
+      addEdge(protNeutralGraph, `${comp.id}:IN_N`, `${comp.id}:OUT_N`);
+    }
+    else if (comp.type === COMPONENT_TYPES.NEUTRAL_BAR) {
+      const terms = registryItem.terminals;
+      for (let i = 0; i < terms.length - 1; i++) addEdge(protNeutralGraph, `${comp.id}:${terms[i].id}`, `${comp.id}:${terms[i+1].id}`);
+    } 
+    else if (comp.type === COMPONENT_TYPES.BUSBAR) {
+       const terms = registryItem.terminals;
+       const inT = terms.find(t => t.id === 'IN');
+       if (inT) {
+          terms.forEach(t => {
+             if (t.id !== 'IN') addEdge(protPhaseGraph, `${comp.id}:IN`, `${comp.id}:${t.id}`);
+          });
+       }
+    }
+  });
+
+  // Sources for Protection Sets: All RCCB/RCBO Outputs
+  const rccbPhaseOuts = [];
+  const rccbNeutralOuts = [];
+  
+  rccbList.forEach(rccb => {
+      // Regardless of ON/OFF, the output side is the "Protected Zone" conceptually.
+      // But physically, it's only energized if ON. 
+      // We want to visualize "Protected Wiring" even if OFF? 
+      // Prompt says "Neutral wires after RCCB highlighted as protected neutral".
+      // Usually static property of topology.
+      rccbPhaseOuts.push(`${rccb.id}:L_OUT`);
+      rccbNeutralOuts.push(`${rccb.id}:N_OUT`);
+  });
+
+  propagate(rccbPhaseOuts, protPhaseGraph, protectedPhaseSet);
+  propagate(rccbNeutralOuts, protNeutralGraph, protectedNeutralSet);
+
+  // 5. Compute Socket States
   components.forEach(comp => {
     if (comp.type === COMPONENT_TYPES.SOCKET) {
       const hasL = livePhaseSet.has(`${comp.id}:L`);
       const hasN = neutralSet.has(`${comp.id}:N`);
       const hasE = earthSet.has(`${comp.id}:E`);
+      
+      const isProtL = protectedPhaseSet.has(`${comp.id}:L`);
+      const isProtN = protectedNeutralSet.has(`${comp.id}:N`);
 
-      let status = 'DEAD'; // Gray
+      let status = 'DEAD'; 
+      let warning = null;
+
       if (hasL && hasN && hasE) {
-        status = 'LIVE_OK'; // Green
+        status = 'LIVE_OK';
       } else if (hasL && hasN && !hasE) {
-        status = 'NO_EARTH'; // Orange
+        status = 'NO_EARTH';
       } else if (hasL && !hasN) {
-        status = 'NO_NEUTRAL'; // Orange
+        status = 'NO_NEUTRAL';
       } else if (!hasL) {
-        status = 'NO_PHASE'; // Gray/Dead
+        status = 'NO_PHASE';
+      }
+
+      // Bypass Check
+      if (isProtL && !isProtN && hasN) {
+          // It has Phase from RCCB, but Neutral NOT from RCCB (but has Neutral from somewhere, likely raw)
+          warning = 'NEUTRAL_BYPASS'; 
+          // Override status to indicate fault/warning visual?
+          // The socket works, but is unsafe.
+          status = 'UNSAFE_BYPASS';
       }
 
       socketStates[comp.id] = {
@@ -150,9 +228,10 @@ export const evaluateNetwork = (components, wires) => {
         hasNeutral: hasN,
         hasEarth: hasE,
         status,
+        warning
       };
     }
   });
 
-  return { livePhaseSet, neutralSet, earthSet, socketStates };
+  return { livePhaseSet, neutralSet, earthSet, socketStates, protectedPhaseSet, protectedNeutralSet };
 };

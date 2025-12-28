@@ -8,6 +8,8 @@ export const COMPONENT_TYPES = {
   BUSBAR: 'BUSBAR',
   SWITCH: 'SWITCH',
   LAMP: 'LAMP',
+  RCCB: 'RCCB',
+  RCBO: 'RCBO',
 };
 
 export const TERMINAL_KINDS = {

@@ -90,18 +90,31 @@ export const PropertiesPanel = () => {
         </div>
 
         {/* Specific Properties based on Type */}
-        {selectedComponent.type === COMPONENT_TYPES.MCB && (
+        {(selectedComponent.type === COMPONENT_TYPES.MCB || 
+          selectedComponent.type === COMPONENT_TYPES.SWITCH || 
+          selectedComponent.type === COMPONENT_TYPES.RCCB || 
+          selectedComponent.type === COMPONENT_TYPES.RCBO) && (
            <div className="flex items-center justify-between p-2 bg-gray-700 rounded">
               <span className="text-gray-200 text-sm">Switch State</span>
               <button
-                onClick={() => handlePropChange('isOn', !selectedComponent.properties.isOn)}
+                onClick={() => {
+                    // Reset trip if toggling
+                    let newState = !selectedComponent.properties.isOn;
+                    let updates = { isOn: newState };
+                    if (selectedComponent.properties.isTripped) {
+                        updates.isTripped = false; // Reset trip
+                        updates.isOn = true; // Force ON or whatever logic desired
+                    }
+                    handlePropChange('isOn', newState);
+                    if (selectedComponent.properties.isTripped) handlePropChange('isTripped', false);
+                }}
                 className={`px-3 py-1 rounded text-xs font-bold ${
                     selectedComponent.properties.isOn 
                     ? 'bg-green-600 text-white' 
                     : 'bg-red-600 text-white'
                 }`}
               >
-                {selectedComponent.properties.isOn ? 'ON' : 'OFF'}
+                {selectedComponent.properties.isTripped ? 'TRIPPED (RESET)' : (selectedComponent.properties.isOn ? 'ON' : 'OFF')}
               </button>
            </div>
         )}
@@ -130,9 +143,17 @@ export const PropertiesPanel = () => {
                 <StatusRow label="Neutral" active={simulationState.socketStates[selectedComponent.id]?.hasNeutral} color="blue" />
                 <StatusRow label="Earth" active={simulationState.socketStates[selectedComponent.id]?.hasEarth} color="green" />
                 
-                <div className="mt-2 pt-2 border-t border-gray-700 text-center font-mono text-xs">
+                <div className={`mt-2 pt-2 border-t border-gray-700 text-center font-mono text-xs ${
+                    simulationState.socketStates[selectedComponent.id]?.status === 'UNSAFE_BYPASS' ? 'text-red-400 font-bold' : ''
+                }`}>
                     {simulationState.socketStates[selectedComponent.id]?.status}
                 </div>
+                
+                {simulationState.socketStates[selectedComponent.id]?.warning === 'NEUTRAL_BYPASS' && (
+                    <div className="text-xs text-red-400 bg-red-900/30 p-2 rounded border border-red-900">
+                        ⚠ Danger: Neutral bypasses RCCB! No leakage protection.
+                    </div>
+                )}
             </div>
         )}
 

@@ -12,6 +12,9 @@ export const WiresLayer = () => {
   const selectWire = useEditorStore((state) => state.selectWire);
   const simulationState = useEditorStore((state) => state.simulationState);
 
+  // Destructure sets for cleaner lookups
+  const { livePhaseSet, neutralSet, earthSet, protectedPhaseSet, protectedNeutralSet } = simulationState;
+
   return (
     <Group>
       {wires.map((wire) => {
@@ -24,7 +27,6 @@ export const WiresLayer = () => {
         const end = getTerminalPos(toComp, wire.to.terminalId);
         const isSelected = selectedWireId === wire.id;
         
-        // Construct points: Start -> Waypoints -> End
         const waypoints = wire.waypoints || [];
         const points = [
             start.x, start.y,
@@ -32,39 +34,45 @@ export const WiresLayer = () => {
             end.x, end.y
         ];
 
-        // Determine Wire Kind (Phase/Neutral/Earth) to pick color
-        // And check if energized
         const fromRegistry = PART_REGISTRY[fromComp.type];
         const term = fromRegistry.terminals.find(t => t.id === wire.from.terminalId);
         
         let strokeColor = '#9CA3AF'; // Default Gray
-        let isEnergized = false;
+        let dash = [];
 
         if (term) {
            const fromIdStr = `${wire.from.compId}:${wire.from.terminalId}`;
            const toIdStr = `${wire.to.compId}:${wire.to.terminalId}`;
 
            if (term.kind === TERMINAL_KINDS.PHASE) {
-              isEnergized = simulationState.livePhaseSet.has(fromIdStr) && simulationState.livePhaseSet.has(toIdStr);
-              strokeColor = isEnergized ? '#B91C1C' : '#7F1D1D'; // Bright Red vs Dark Red
-              if (!isEnergized) strokeColor = '#4B5563'; // Dim gray if dead
+              const isEnergized = livePhaseSet.has(fromIdStr) && livePhaseSet.has(toIdStr);
+              const isProtected = protectedPhaseSet && (protectedPhaseSet.has(fromIdStr) || protectedPhaseSet.has(toIdStr));
+              
+              if (isEnergized) {
+                  strokeColor = isProtected ? '#EF4444' : '#B91C1C'; // Bright Red vs Dark Red
+              } else {
+                  strokeColor = '#4B5563'; // Dim gray
+              }
            } else if (term.kind === TERMINAL_KINDS.NEUTRAL) {
-              isEnergized = simulationState.neutralSet.has(fromIdStr) && simulationState.neutralSet.has(toIdStr);
-              strokeColor = isEnergized ? '#3B82F6' : '#1E3A8A'; // Blue vs Dark Blue
-              if (!isEnergized) strokeColor = '#4B5563';
+              const isEnergized = neutralSet.has(fromIdStr) && neutralSet.has(toIdStr);
+              const isProtected = protectedNeutralSet && (protectedNeutralSet.has(fromIdStr) || protectedNeutralSet.has(toIdStr));
+
+              if (isEnergized) {
+                  strokeColor = isProtected ? '#3B82F6' : '#1E3A8A'; // Bright Blue vs Dark Blue
+              } else {
+                  strokeColor = '#4B5563';
+              }
            } else if (term.kind === TERMINAL_KINDS.EARTH) {
-              isEnergized = simulationState.earthSet.has(fromIdStr) && simulationState.earthSet.has(toIdStr);
-              strokeColor = isEnergized ? '#10B981' : '#064E3B'; // Green vs Dark Green
+              const isEnergized = earthSet.has(fromIdStr) && earthSet.has(toIdStr);
+              strokeColor = isEnergized ? '#10B981' : '#064E3B'; 
               if (!isEnergized) strokeColor = '#4B5563';
            }
         }
 
-        // Selected override
         if (isSelected) strokeColor = '#60A5FA'; 
 
         return (
           <Group key={wire.id}>
-            {/* Hit area (thick invisible line) */}
             <Line
               points={points}
               stroke="transparent"
@@ -86,17 +94,17 @@ export const WiresLayer = () => {
                 selectWire(wire.id);
               }}
             />
-            {/* Visible Wire */}
             <Line
               points={points}
               stroke={strokeColor} 
               strokeWidth={isSelected ? 4 : 2}
+              dash={dash}
               lineCap="round"
               lineJoin="round"
-              shadowColor={isEnergized ? strokeColor : 'black'}
-              shadowBlur={isEnergized ? 5 : 0}
+              shadowColor={strokeColor !== '#4B5563' ? strokeColor : 'transparent'}
+              shadowBlur={strokeColor !== '#4B5563' ? 5 : 0}
               shadowOpacity={0.5}
-              listening={false} // pass events to hit area
+              listening={false}
             />
           </Group>
         );
