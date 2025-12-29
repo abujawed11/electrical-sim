@@ -399,14 +399,35 @@ The meter doesn't care about balance. But YOU should balance loads to avoid:
 • Neutral current issues
 • Voltage imbalance
 
-🎯 YOUR TASK: We don't have a 3-phase meter component yet, so just understand the concept!
-(Click to continue)
+💡 LOOK AT THE LABEL COLORS:
+• Red labels (R-I, R-O) = Red phase terminals
+• Yellow labels (Y-I, Y-O) = Yellow phase terminals
+• Blue labels (B-I, B-O) = Blue phase terminals
+
+🎯 YOUR TASK: NOW WIRE IT FOR REAL!
+Place a 3-Phase Energy Meter and connect the SUPPLY to the METER INPUT side.
+Connect all 4 wires: R → R-I, Y → Y-I, B → B-I, N → N-I
 `,
-    allowedParts: [COMPONENT_TYPES.SUPPLY_3P],
+    allowedParts: [COMPONENT_TYPES.SUPPLY_3P, COMPONENT_TYPES.METER_3P],
     checklist: [
-      { id: 'understand_meter', label: 'Understand 3-phase meter connections' },
+      { id: 'place_meter', label: 'Place 3-Phase Energy Meter' },
+      { id: 'conn_r', label: 'Connect Supply R → Meter IN_R' },
+      { id: 'conn_y', label: 'Connect Supply Y → Meter IN_Y' },
+      { id: 'conn_b', label: 'Connect Supply B → Meter IN_B' },
+      { id: 'conn_n', label: 'Connect Supply N → Meter IN_N' },
     ],
-    validate: () => true, // Auto-pass
+    validate: (components, wires) => {
+      const supply = components.find(c => c.type === COMPONENT_TYPES.SUPPLY_3P);
+      const meter = components.find(c => c.type === COMPONENT_TYPES.METER_3P);
+      if (!supply || !meter) return false;
+
+      const isConn = (t1, t2) => wires.some(w =>
+        (w.from.compId === supply.id && w.from.terminalId === t1 && w.to.compId === meter.id && w.to.terminalId === t2) ||
+        (w.from.compId === meter.id && w.from.terminalId === t2 && w.to.compId === supply.id && w.to.terminalId === t1)
+      );
+
+      return isConn('R', 'IN_R') && isConn('Y', 'IN_Y') && isConn('B', 'IN_B') && isConn('N', 'IN_N');
+    }
   },
   {
     id: 'T10',
@@ -488,32 +509,517 @@ Let's wire a real home with 3-phase supply!
    - From B Busbar: MCB-3 (25A) → Geyser
    - ... (more circuits)
 
-🎯 YOUR TASK: Build this setup in the simulator!
+🎯 YOUR TASK: Wire Meter → Main MCB!
+
+After the meter, you need a MAIN ISOLATOR (3-Pole MCB) that can switch OFF all 3 phases together for safety.
 
 STEPS:
-1. Place 3-Phase Supply
-2. Wire it to 3-Phase Motor (pretend it's your distribution board)
-3. Check all phases are energized
+1. Place a 3-Pole MCB (Main MCB)
+2. Wire Meter OUTPUT → MCB INPUT
+   - Meter OUT_R → MCB IN_R
+   - Meter OUT_Y → MCB IN_Y
+   - Meter OUT_B → MCB IN_B
+3. Turn ON the MCB
 
-(In a real setup, you'd have busbars and MCBs for each phase)
+📋 NOTE: We're skipping neutral connection for now (neutral usually goes directly to busbar). This lesson focuses on the 3-phase lines.
+
+This MCB is your main isolator - when you switch it OFF, the entire house loses power!
 `,
-    allowedParts: [COMPONENT_TYPES.SUPPLY_3P, COMPONENT_TYPES.LOAD_3P_BALANCED],
+    allowedParts: [COMPONENT_TYPES.SUPPLY_3P, COMPONENT_TYPES.METER_3P, COMPONENT_TYPES.MCB_3P],
     checklist: [
-      { id: 'place_supply', label: 'Place 3-Phase Supply' },
-      { id: 'place_load', label: 'Place 3-Phase Load (Distribution)' },
-      { id: 'wire_all', label: 'Wire R, Y, B, E correctly' },
+      { id: 'place_mcb', label: 'Place 3-Pole MCB' },
+      { id: 'conn_r', label: 'Connect Meter OUT_R → MCB IN_R' },
+      { id: 'conn_y', label: 'Connect Meter OUT_Y → MCB IN_Y' },
+      { id: 'conn_b', label: 'Connect Meter OUT_B → MCB IN_B' },
+      { id: 'switch_on', label: 'Turn ON the MCB' },
     ],
     validate: (components, wires) => {
-        const supply = components.find(c => c.type === COMPONENT_TYPES.SUPPLY_3P);
-        const load = components.find(c => c.type === COMPONENT_TYPES.LOAD_3P_BALANCED);
-        if (!supply || !load) return false;
+        const meter = components.find(c => c.type === COMPONENT_TYPES.METER_3P);
+        const mcb = components.find(c => c.type === COMPONENT_TYPES.MCB_3P);
+        if (!meter || !mcb) return false;
 
         const isConn = (t1, t2) => wires.some(w =>
-            (w.from.compId === supply.id && w.from.terminalId === t1 && w.to.compId === load.id && w.to.terminalId === t2) ||
-            (w.from.compId === load.id && w.from.terminalId === t2 && w.to.compId === supply.id && w.to.terminalId === t1)
+            (w.from.compId === meter.id && w.from.terminalId === t1 && w.to.compId === mcb.id && w.to.terminalId === t2) ||
+            (w.from.compId === mcb.id && w.from.terminalId === t2 && w.to.compId === meter.id && w.to.terminalId === t1)
         );
 
-        return isConn('R', 'R') && isConn('Y', 'Y') && isConn('B', 'B') && isConn('E', 'E');
+        return isConn('OUT_R', 'IN_R') && isConn('OUT_Y', 'IN_Y') && isConn('OUT_B', 'IN_B') && mcb.properties.isOn;
+    }
+  },
+  {
+    id: 'T11A',
+    title: 'Phase Distribution with Busbars',
+    description: `
+🏗️ CREATING THE DISTRIBUTION BOARD
+
+Now we need to DISTRIBUTE each phase to different circuits (rooms) in your home!
+
+📊 WHAT ARE PHASE BUSBARS?
+
+Just like single-phase homes use ONE busbar for phase, 3-phase homes use THREE separate busbars:
+• R Phase Busbar (RED) - For R-phase circuits
+• Y Phase Busbar (YELLOW) - For Y-phase circuits
+• B Phase Busbar (BLUE) - For B-phase circuits
+
+Plus the usual:
+• Neutral Bar (for all neutral returns)
+• Earth Bar (for all earth wires)
+
+🔌 CONNECTION:
+
+From Main MCB OUT → To Phase Busbars:
+• MCB OUT_R → R Phase Busbar
+• MCB OUT_Y → Y Phase Busbar
+• MCB OUT_B → B Phase Busbar
+
+Later, you'll connect individual MCBs to each busbar for different rooms!
+
+🎯 YOUR TASK: Add Phase Busbars!
+
+Place all 3 phase busbars and connect the Main MCB output to them.
+Wire: MCB OUT_R → R Busbar IN, MCB OUT_Y → Y Busbar IN, MCB OUT_B → B Busbar IN
+
+This creates your distribution point where all phase loads will connect!
+`,
+    allowedParts: [COMPONENT_TYPES.SUPPLY_3P, COMPONENT_TYPES.METER_3P, COMPONENT_TYPES.MCB_3P, COMPONENT_TYPES.BUSBAR_R, COMPONENT_TYPES.BUSBAR_Y, COMPONENT_TYPES.BUSBAR_B],
+    checklist: [
+      { id: 'place_r_busbar', label: 'Place R Phase Busbar' },
+      { id: 'place_y_busbar', label: 'Place Y Phase Busbar' },
+      { id: 'place_b_busbar', label: 'Place B Phase Busbar' },
+      { id: 'conn_r', label: 'Connect MCB OUT_R → R Busbar' },
+      { id: 'conn_y', label: 'Connect MCB OUT_Y → Y Busbar' },
+      { id: 'conn_b', label: 'Connect MCB OUT_B → B Busbar' },
+    ],
+    validate: (components, wires) => {
+        const mcb = components.find(c => c.type === COMPONENT_TYPES.MCB_3P);
+        const busbarR = components.find(c => c.type === COMPONENT_TYPES.BUSBAR_R);
+        const busbarY = components.find(c => c.type === COMPONENT_TYPES.BUSBAR_Y);
+        const busbarB = components.find(c => c.type === COMPONENT_TYPES.BUSBAR_B);
+
+        if (!mcb || !busbarR || !busbarY || !busbarB) return false;
+
+        const isConn = (compId, termId, busbarId) => wires.some(w =>
+            (w.from.compId === compId && w.from.terminalId === termId && w.to.compId === busbarId) ||
+            (w.from.compId === busbarId && w.to.compId === compId && w.to.terminalId === termId)
+        );
+
+        // Check MCB outputs are connected to respective busbars (any terminal on busbar)
+        const hasRConnection = wires.some(w =>
+            (w.from.compId === mcb.id && w.from.terminalId === 'OUT_R' && w.to.compId === busbarR.id) ||
+            (w.to.compId === mcb.id && w.to.terminalId === 'OUT_R' && w.from.compId === busbarR.id)
+        );
+        const hasYConnection = wires.some(w =>
+            (w.from.compId === mcb.id && w.from.terminalId === 'OUT_Y' && w.to.compId === busbarY.id) ||
+            (w.to.compId === mcb.id && w.to.terminalId === 'OUT_Y' && w.from.compId === busbarY.id)
+        );
+        const hasBConnection = wires.some(w =>
+            (w.from.compId === mcb.id && w.from.terminalId === 'OUT_B' && w.to.compId === busbarB.id) ||
+            (w.to.compId === mcb.id && w.to.terminalId === 'OUT_B' && w.from.compId === busbarB.id)
+        );
+
+        return hasRConnection && hasYConnection && hasBConnection;
+    }
+  },
+  {
+    id: 'T11B',
+    title: '🔌 Individual Room MCBs',
+    description: `
+🔌 PROTECTING INDIVIDUAL CIRCUITS
+
+Now that you have phase busbars (R, Y, B), you need individual MCBs for each room/circuit.
+
+🏠 TYPICAL HOME DISTRIBUTION:
+
+Each room gets:
+• One phase (R or Y or B)
+• Common neutral
+• Common earth
+• Individual MCB for protection
+
+📋 EXAMPLE 3-BHK LAYOUT:
+
+R Phase:
+• Master Bedroom (AC 1.5 Ton = 2kW) → 16A MCB
+• Living Room (Lights + TV = 500W) → 6A MCB
+
+Y Phase:
+• Kitchen (All appliances = 3kW) → 20A MCB
+• Bedroom 2 (AC 1 Ton = 1.5kW) → 10A MCB
+
+B Phase:
+• Geyser (2kW) → 16A MCB
+• Bedroom 3 (AC + Lights = 2kW) → 16A MCB
+
+🎯 MCB SIZING FORMULA:
+
+Current = Power ÷ Voltage
+Current = Watts ÷ 230V
+
+Examples:
+• 2000W geyser: 2000÷230 = 8.7A → Use **16A MCB**
+• 1500W AC: 1500÷230 = 6.5A → Use **10A MCB**
+• 500W lights: 500÷230 = 2.2A → Use **6A MCB**
+
+💡 RULE: Always use next higher standard MCB rating!
+Standard sizes: 6A, 10A, 16A, 20A, 25A, 32A, 40A
+
+⚠️ WHY INDIVIDUAL MCBs?
+
+1. **Safety**: Fault in one room doesn't trip whole house
+2. **Convenience**: Can isolate circuits for maintenance
+3. **Code Compliance**: Required by electrical regulations
+4. **Easy Troubleshooting**: Know which circuit has issues
+
+🎯 YOUR TASK: Place individual MCBs from each phase busbar
+
+Let's add MCBs for two rooms:
+• 1 MCB from R busbar (Master bedroom circuit)
+• 1 MCB from Y busbar (Kitchen circuit)
+• 1 MCB from B busbar (Geyser circuit)
+`,
+    allowedParts: [
+        COMPONENT_TYPES.SUPPLY_3P,
+        COMPONENT_TYPES.METER_3P,
+        COMPONENT_TYPES.MCB_3P,
+        COMPONENT_TYPES.BUSBAR_R,
+        COMPONENT_TYPES.BUSBAR_Y,
+        COMPONENT_TYPES.BUSBAR_B,
+        COMPONENT_TYPES.MCB,
+        COMPONENT_TYPES.NEUTRAL_BAR,
+        COMPONENT_TYPES.EARTH_BAR
+    ],
+    checklist: [
+      { id: 'place_mcb_r', label: 'Place MCB for R phase circuit' },
+      { id: 'place_mcb_y', label: 'Place MCB for Y phase circuit' },
+      { id: 'place_mcb_b', label: 'Place MCB for B phase circuit' },
+      { id: 'connect_r', label: 'Connect R busbar to MCB_R input (LIN)' },
+      { id: 'connect_y', label: 'Connect Y busbar to MCB_Y input (LIN)' },
+      { id: 'connect_b', label: 'Connect B busbar to MCB_B input (LIN)' },
+    ],
+    validate: (components, wires) => {
+        const busbarR = components.find(c => c.type === COMPONENT_TYPES.BUSBAR_R);
+        const busbarY = components.find(c => c.type === COMPONENT_TYPES.BUSBAR_Y);
+        const busbarB = components.find(c => c.type === COMPONENT_TYPES.BUSBAR_B);
+        const mcbs = components.filter(c => c.type === COMPONENT_TYPES.MCB);
+
+        if (!busbarR || !busbarY || !busbarB || mcbs.length < 3) return false;
+
+        // Check if at least one MCB is connected to each busbar
+        const hasMcbOnR = mcbs.some(mcb =>
+            wires.some(w =>
+                (w.from.compId === busbarR.id && w.to.compId === mcb.id && w.to.terminalId === 'LIN') ||
+                (w.to.compId === busbarR.id && w.from.compId === mcb.id && w.from.terminalId === 'LIN')
+            )
+        );
+
+        const hasMcbOnY = mcbs.some(mcb =>
+            wires.some(w =>
+                (w.from.compId === busbarY.id && w.to.compId === mcb.id && w.to.terminalId === 'LIN') ||
+                (w.to.compId === busbarY.id && w.from.compId === mcb.id && w.from.terminalId === 'LIN')
+            )
+        );
+
+        const hasMcbOnB = mcbs.some(mcb =>
+            wires.some(w =>
+                (w.from.compId === busbarB.id && w.to.compId === mcb.id && w.to.terminalId === 'LIN') ||
+                (w.to.compId === busbarB.id && w.from.compId === mcb.id && w.from.terminalId === 'LIN')
+            )
+        );
+
+        return hasMcbOnR && hasMcbOnY && hasMcbOnB;
+    }
+  },
+  {
+    id: 'T11C',
+    title: '🛏️ Wiring Your First Room',
+    description: `
+🛏️ LET'S WIRE A COMPLETE BEDROOM!
+
+Now you'll wire a complete room circuit with actual loads!
+
+📋 BEDROOM CIRCUIT COMPONENTS:
+
+From MCB output:
+• Phase (R) → Goes to all appliances
+• Neutral Bar → Common neutral for all
+• Earth Bar → Safety ground for all
+
+Bedroom Loads:
+• 1.5 Ton AC (2000W) ⚡
+• Ceiling Fan (75W) 💨
+• LED Lights (40W) 💡
+
+All loads need:
+• Live (L) from phase
+• Neutral (N) from neutral bar
+• (Earth usually assumed in real wiring)
+
+🔌 WIRING STEPS:
+
+Step 1: Connect Neutral Bar
+• From Meter OUT_N → Neutral Bar
+
+Step 2: Wire MCB Output to Loads
+• MCB LOUT (R phase) → AC "L" terminal
+• MCB LOUT → Fan "L" terminal
+• MCB LOUT → Lamp "L" terminal
+
+Step 3: Wire Neutral to Loads
+• Neutral Bar → AC "N" terminal
+• Neutral Bar → Fan "N" terminal
+• Neutral Bar → Lamp "N" terminal
+
+⚡ WHAT HAPPENS:
+
+When MCB is ON:
+✅ R phase flows through MCB to all appliances
+✅ Neutral completes the circuit
+✅ AC draws ~8.7A, Fan draws ~0.3A, Lamp draws ~0.2A
+✅ Total: ~9.2A (safe for 16A MCB!)
+
+If Overload (e.g. short circuit):
+❌ Current exceeds 16A
+❌ MCB trips instantly
+❌ Only bedroom circuit goes off (others still work!)
+
+🎯 YOUR TASK: Wire a complete bedroom from R phase
+
+Add these components and wire them:
+• 1 AC (from MCB on R phase)
+• 1 FAN (from same MCB)
+• 1 LAMP (from same MCB)
+• All neutrals from neutral bar
+`,
+    allowedParts: [
+        COMPONENT_TYPES.SUPPLY_3P,
+        COMPONENT_TYPES.METER_3P,
+        COMPONENT_TYPES.MCB_3P,
+        COMPONENT_TYPES.BUSBAR_R,
+        COMPONENT_TYPES.BUSBAR_Y,
+        COMPONENT_TYPES.BUSBAR_B,
+        COMPONENT_TYPES.MCB,
+        COMPONENT_TYPES.NEUTRAL_BAR,
+        COMPONENT_TYPES.EARTH_BAR,
+        COMPONENT_TYPES.AC,
+        COMPONENT_TYPES.FAN,
+        COMPONENT_TYPES.LAMP
+    ],
+    checklist: [
+      { id: 'neutral_bar', label: 'Place Neutral Bar and connect to Meter OUT_N' },
+      { id: 'place_ac', label: 'Place AC unit' },
+      { id: 'place_fan', label: 'Place Ceiling Fan' },
+      { id: 'place_lamp', label: 'Place Lamp/Lights' },
+      { id: 'wire_ac_l', label: 'Connect MCB output to AC Live terminal' },
+      { id: 'wire_ac_n', label: 'Connect Neutral Bar to AC Neutral terminal' },
+      { id: 'wire_fan_l', label: 'Connect MCB output to Fan Live terminal' },
+      { id: 'wire_fan_n', label: 'Connect Neutral Bar to Fan Neutral terminal' },
+      { id: 'wire_lamp_l', label: 'Connect MCB output to Lamp Live terminal' },
+      { id: 'wire_lamp_n', label: 'Connect Neutral Bar to Lamp Neutral terminal' },
+    ],
+    validate: (components, wires) => {
+        const meter = components.find(c => c.type === COMPONENT_TYPES.METER_3P);
+        const neutralBar = components.find(c => c.type === COMPONENT_TYPES.NEUTRAL_BAR);
+        const ac = components.find(c => c.type === COMPONENT_TYPES.AC);
+        const fan = components.find(c => c.type === COMPONENT_TYPES.FAN);
+        const lamp = components.find(c => c.type === COMPONENT_TYPES.LAMP);
+        const mcbs = components.filter(c => c.type === COMPONENT_TYPES.MCB);
+
+        if (!meter || !neutralBar || !ac || !fan || !lamp || mcbs.length === 0) return false;
+
+        // Check neutral bar connected to meter
+        const neutralBarConnected = wires.some(w =>
+            (w.from.compId === meter.id && w.from.terminalId === 'OUT_N' && w.to.compId === neutralBar.id) ||
+            (w.to.compId === meter.id && w.to.terminalId === 'OUT_N' && w.from.compId === neutralBar.id)
+        );
+
+        // Check if loads have both L and N connections
+        const checkLoad = (loadId) => {
+            const hasLive = mcbs.some(mcb =>
+                wires.some(w =>
+                    (w.from.compId === mcb.id && w.from.terminalId === 'LOUT' && w.to.compId === loadId && w.to.terminalId === 'L') ||
+                    (w.to.compId === mcb.id && w.to.terminalId === 'LOUT' && w.from.compId === loadId && w.from.terminalId === 'L')
+                )
+            );
+
+            const hasNeutral = wires.some(w =>
+                (w.from.compId === neutralBar.id && w.to.compId === loadId && w.to.terminalId === 'N') ||
+                (w.to.compId === neutralBar.id && w.from.compId === loadId && w.from.terminalId === 'N')
+            );
+
+            return hasLive && hasNeutral;
+        };
+
+        return neutralBarConnected && checkLoad(ac.id) && checkLoad(fan.id) && checkLoad(lamp.id);
+    }
+  },
+  {
+    id: 'T11D',
+    title: '🏠 Complete 3-BHK Home Wiring',
+    description: `
+🏠 FINAL CHALLENGE: WIRE A COMPLETE 3-BHK HOME!
+
+Now put everything together! Wire a full 3-bedroom home with balanced load distribution.
+
+📋 HOME SPECIFICATION:
+
+🔴 R PHASE (Red Busbar):
+• Master Bedroom AC (2000W) - 16A MCB
+• Living Room Lights (100W) - 6A MCB
+
+🟡 Y PHASE (Yellow Busbar):
+• Kitchen Appliances:
+  - Geyser (2000W) - 20A MCB
+  - Lights (50W)
+
+🔵 B PHASE (Blue Busbar):
+• Bedroom 2 AC (1500W) - 10A MCB
+• Bedroom 3 Fan + Lights (125W) - 6A MCB
+
+📊 LOAD ANALYSIS:
+
+Total Load per Phase:
+• R: 2100W (2.1kW) → ~9.1A
+• Y: 2050W (2.05kW) → ~8.9A
+• B: 1625W (1.625kW) → ~7.1A
+
+✅ Fairly Balanced! (Good design)
+✅ Total: 5.775kW (manageable for 3-phase)
+✅ No single phase overloaded
+
+🎯 YOUR TASK: Build the complete home!
+
+You need to place and wire:
+
+PROTECTION:
+• 3-Phase Supply ⚡
+• 3-Phase Energy Meter 📊
+• Main 3-Pole MCB (40A) 🔒
+• Phase Busbars (R, Y, B) 🔴🟡🔵
+• Neutral Bar (N) ⚪
+• Individual MCBs (at least 6 for different circuits) 🔌
+
+LOADS:
+• 2× AC units (Master BR, Bedroom 2)
+• 1× Geyser (Kitchen)
+• 2× Lamps (Living room, Kitchen)
+• 1× Fan (Bedroom 3)
+
+WIRING:
+✅ Supply → Meter (all 4 wires: R, Y, B, N)
+✅ Meter → Main MCB (R, Y, B)
+✅ Main MCB → Phase Busbars (R→R, Y→Y, B→B)
+✅ Meter Neutral → Neutral Bar
+✅ Individual MCBs from each busbar
+✅ Loads properly distributed and connected
+
+💡 TIPS:
+
+1. Start with the main supply chain (Supply → Meter → MCB → Busbars)
+2. Add neutral bar from meter
+3. Place individual MCBs on each busbar
+4. Add loads and wire them (L from MCB, N from neutral bar)
+5. Turn ON all MCBs to verify energization!
+
+⚠️ COMMON MISTAKES TO AVOID:
+
+❌ Putting all heavy loads on one phase (imbalanced!)
+❌ Forgetting neutral connections (loads won't work!)
+❌ Wrong MCB rating (6A for 2000W geyser = trips!)
+❌ Not switching MCBs ON (loads stay off!)
+
+🎯 When done correctly:
+✅ All colored terminals glow with phase colors
+✅ Loads show power consumption in properties
+✅ System is balanced and safe
+✅ You're a certified home electrician! 🎓⚡
+
+Go ahead and wire your home! Take your time, this is the real deal! 💪
+`,
+    allowedParts: Object.values(COMPONENT_TYPES), // Allow everything!
+    checklist: [
+      { id: 'supply_meter', label: 'Connect Supply to Meter (R,Y,B,N)' },
+      { id: 'meter_mcb', label: 'Connect Meter to Main MCB (R,Y,B)' },
+      { id: 'mcb_busbars', label: 'Connect Main MCB to Phase Busbars' },
+      { id: 'neutral_bar', label: 'Connect Neutral Bar to Meter' },
+      { id: 'mcbs_placed', label: 'Place at least 6 individual MCBs' },
+      { id: 'r_loads', label: 'Wire R phase loads (AC + Lamp)' },
+      { id: 'y_loads', label: 'Wire Y phase loads (Geyser + Lamp)' },
+      { id: 'b_loads', label: 'Wire B phase loads (AC + Fan)' },
+      { id: 'all_on', label: 'Turn ON all MCBs and verify energization' },
+    ],
+    validate: (components, wires) => {
+        // Check all major components exist
+        const supply = components.find(c => c.type === COMPONENT_TYPES.SUPPLY_3P);
+        const meter = components.find(c => c.type === COMPONENT_TYPES.METER_3P);
+        const mainMCB = components.find(c => c.type === COMPONENT_TYPES.MCB_3P);
+        const busbarR = components.find(c => c.type === COMPONENT_TYPES.BUSBAR_R);
+        const busbarY = components.find(c => c.type === COMPONENT_TYPES.BUSBAR_Y);
+        const busbarB = components.find(c => c.type === COMPONENT_TYPES.BUSBAR_B);
+        const neutralBar = components.find(c => c.type === COMPONENT_TYPES.NEUTRAL_BAR);
+
+        const mcbs = components.filter(c => c.type === COMPONENT_TYPES.MCB);
+        const acs = components.filter(c => c.type === COMPONENT_TYPES.AC);
+        const geysers = components.filter(c => c.type === COMPONENT_TYPES.GEYSER);
+        const lamps = components.filter(c => c.type === COMPONENT_TYPES.LAMP);
+        const fans = components.filter(c => c.type === COMPONENT_TYPES.FAN);
+
+        // Basic component check
+        if (!supply || !meter || !mainMCB || !busbarR || !busbarY || !busbarB || !neutralBar) return false;
+        if (mcbs.length < 6) return false;
+        if (acs.length < 2 || geysers.length < 1 || lamps.length < 2 || fans.length < 1) return false;
+
+        // Helper to check connection
+        const isConnected = (comp1Id, term1, comp2Id, term2) => {
+            return wires.some(w =>
+                (w.from.compId === comp1Id && w.from.terminalId === term1 && w.to.compId === comp2Id && w.to.terminalId === term2) ||
+                (w.to.compId === comp1Id && w.to.terminalId === term1 && w.from.compId === comp2Id && w.from.terminalId === term2)
+            );
+        };
+
+        // Check main supply chain connections
+        const supplyToMeter =
+            isConnected(supply.id, 'R', meter.id, 'IN_R') &&
+            isConnected(supply.id, 'Y', meter.id, 'IN_Y') &&
+            isConnected(supply.id, 'B', meter.id, 'IN_B') &&
+            isConnected(supply.id, 'N', meter.id, 'IN_N');
+
+        const meterToMCB =
+            isConnected(meter.id, 'OUT_R', mainMCB.id, 'IN_R') &&
+            isConnected(meter.id, 'OUT_Y', mainMCB.id, 'IN_Y') &&
+            isConnected(meter.id, 'OUT_B', mainMCB.id, 'IN_B');
+
+        const mcbToBusbars =
+            isConnected(mainMCB.id, 'OUT_R', busbarR.id, 'IN') &&
+            isConnected(mainMCB.id, 'OUT_Y', busbarY.id, 'IN') &&
+            isConnected(mainMCB.id, 'OUT_B', busbarB.id, 'IN');
+
+        const neutralConnected = isConnected(meter.id, 'OUT_N', neutralBar.id, 'IN');
+
+        // Check if at least some loads are properly wired (at least 3 loads with both L and N)
+        const loads = [...acs, ...geysers, ...lamps, ...fans];
+        let properlyWiredLoads = 0;
+
+        loads.forEach(load => {
+            const hasLive = mcbs.some(mcb =>
+                wires.some(w =>
+                    (w.from.compId === mcb.id && w.from.terminalId === 'LOUT' && w.to.compId === load.id && w.to.terminalId === 'L') ||
+                    (w.to.compId === mcb.id && w.to.terminalId === 'LOUT' && w.from.compId === load.id && w.from.terminalId === 'L')
+                )
+            );
+
+            const hasNeutral = wires.some(w =>
+                (w.from.compId === neutralBar.id && w.to.compId === load.id && w.to.terminalId === 'N') ||
+                (w.to.compId === neutralBar.id && w.from.compId === load.id && w.from.terminalId === 'N')
+            );
+
+            if (hasLive && hasNeutral) properlyWiredLoads++;
+        });
+
+        // Check if main MCB is ON
+        const mainMCBOn = mainMCB.properties?.isOn === true;
+
+        return supplyToMeter && meterToMCB && mcbToBusbars && neutralConnected &&
+               properlyWiredLoads >= 5 && mainMCBOn;
     }
   },
   {

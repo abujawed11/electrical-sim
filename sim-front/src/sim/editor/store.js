@@ -488,7 +488,17 @@ export const useEditorStore = create(
 
         if (fromTerm.kind !== toTerm.kind) {
           // Allow GENERIC to connect to anything
-          if (fromTerm.kind !== 'GENERIC' && toTerm.kind !== 'GENERIC') {
+          if (fromTerm.kind === 'GENERIC' || toTerm.kind === 'GENERIC') {
+              // GENERIC can connect to anything - allow
+          }
+          // Allow specific phases (PHASE_R, PHASE_Y, PHASE_B) to connect to generic PHASE
+          else if (
+              (fromTerm.kind === 'PHASE_R' || fromTerm.kind === 'PHASE_Y' || fromTerm.kind === 'PHASE_B') && toTerm.kind === 'PHASE' ||
+              (toTerm.kind === 'PHASE_R' || toTerm.kind === 'PHASE_Y' || toTerm.kind === 'PHASE_B') && fromTerm.kind === 'PHASE'
+          ) {
+              // Phase-specific to generic phase - allow (e.g., BUSBAR_R to MCB)
+          }
+          else {
               console.warn(`Mismatch: ${fromTerm.kind} vs ${toTerm.kind}`);
               get().addMessage(`Cannot connect ${fromTerm.kind} to ${toTerm.kind}. Use a Junction Box or Fault Part if needed.`, 'error');
               set({ draftWire: null });
