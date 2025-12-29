@@ -315,6 +315,7 @@ export const PART_DEFINITIONS = {
     name: '3-Phase Energy Meter',
     defaultProperties: {
       label: '3-PH METER',
+      ratePerUnit: 10,
     },
     terminals: [
       { id: 'IN_R', kind: TERMINAL_KINDS.PHASE_R, relX: -35, relY: 42, label: 'R-I' },

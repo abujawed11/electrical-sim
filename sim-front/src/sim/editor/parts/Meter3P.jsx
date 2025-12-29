@@ -12,6 +12,7 @@ export const Meter3P = ({ id, type, x, y, isSelected, properties, onSelect, onDr
 
   // 3-Phase Energy Reading
   const energy3PhaseKWh = useEditorStore((state) => state.energy3PhaseKWh);
+  const cost = energy3PhaseKWh * (properties.ratePerUnit || 10);
 
   return (
     <Group id={id} x={x} y={y} draggable onClick={onSelect} onTap={onSelect} onDragEnd={onDragEnd}>
@@ -30,10 +31,21 @@ export const Meter3P = ({ id, type, x, y, isSelected, properties, onSelect, onDr
       <Rect width={70} height={30} fill="#064E3B" cornerRadius={2} offset={{ x: 35, y: 35 }} />
       <Text
         text={`${energy3PhaseKWh.toFixed(3)} kWh`}
-        fontSize={10}
-        fontStyle="bold"
+        fontSize={9}
+        fontFamily="monospace"
         fill="#10B981"
-        y={-30}
+        y={-28}
+        width={70}
+        offsetX={35}
+        align="center"
+      />
+      <Text
+        text={`₹${cost.toFixed(2)}`}
+        fontSize={10}
+        fontFamily="monospace"
+        fontStyle="bold"
+        fill="#34D399"
+        y={-15}
         width={70}
         offsetX={35}
         align="center"

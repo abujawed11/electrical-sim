@@ -276,6 +276,22 @@ export const PropertiesPanel = () => {
            </div>
         )}
         
+        {(selectedComponent.type === COMPONENT_TYPES.METER || selectedComponent.type === COMPONENT_TYPES.METER_3P) && (
+            <div className="space-y-3">
+                <div className="space-y-1">
+                    <label className="text-xs text-gray-400 block">Rate per Unit (₹/kWh)</label>
+                    <input
+                        type="number"
+                        min="0"
+                        step="0.5"
+                        value={selectedComponent.properties.ratePerUnit || 10}
+                        onChange={(e) => handlePropChange('ratePerUnit', parseFloat(e.target.value))}
+                        className="w-full bg-gray-900 border border-gray-600 rounded px-2 py-1 text-white"
+                    />
+                </div>
+            </div>
+        )}
+
         {/* Transformer Properties */}
         {selectedComponent.type === COMPONENT_TYPES.TRANSFORMER_3P && (
             <div className="space-y-3">

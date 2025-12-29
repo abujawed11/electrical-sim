@@ -12,6 +12,7 @@ export const Meter = ({ id, type, x, y, isSelected, properties, onSelect, onDrag
   
   // Energy Reading
   const energyKWh = useEditorStore((state) => state.energyKWh);
+  const cost = energyKWh * (properties.ratePerUnit || 10);
 
   return (
     <Group
@@ -60,20 +61,22 @@ export const Meter = ({ id, type, x, y, isSelected, properties, onSelect, onDrag
         strokeWidth={1}
       />
       <Text
-        text={energyKWh.toFixed(3)}
+        text={`${energyKWh.toFixed(2)} kWh`}
         x={-22}
-        y={-20}
-        fontSize={12}
+        y={-28}
+        fontSize={9}
         fontFamily="monospace"
         fill="#374151"
         listening={false}
       />
       <Text
-        text="kWh"
-        x={10}
-        y={-20}
-        fontSize={8}
-        fill="#374151"
+        text={`₹${cost.toFixed(2)}`}
+        x={-22}
+        y={-15}
+        fontSize={10}
+        fontFamily="monospace"
+        fontStyle="bold"
+        fill="#059669"
         listening={false}
       />
 
