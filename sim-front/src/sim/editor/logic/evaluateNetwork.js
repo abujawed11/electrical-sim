@@ -104,16 +104,21 @@ export const evaluateNetwork = (components, wires) => {
       if (comp.properties.position === 'MAINS') {
           addEdge(phaseGraph, `${comp.id}:A_L`, `${comp.id}:OUT_L`);
           addEdge(neutralGraph, `${comp.id}:A_N`, `${comp.id}:OUT_N`);
-      } else {
+      } else if (comp.properties.position === 'INVERTER') {
           addEdge(phaseGraph, `${comp.id}:B_L`, `${comp.id}:OUT_L`);
           addEdge(neutralGraph, `${comp.id}:B_N`, `${comp.id}:OUT_N`);
       }
+    }
+    else if (comp.type === COMPONENT_TYPES.INVERTER) {
+        if (comp.properties.isBypassMode) {
+            addEdge(phaseGraph, `${comp.id}:AC_IN_L`, `${comp.id}:AC_OUT_L`);
+            addEdge(neutralGraph, `${comp.id}:AC_IN_N`, `${comp.id}:AC_OUT_N`);
+        }
     }
   });
 
   // 2. Identify Sources
   const supplies = components.filter(c => c.type === COMPONENT_TYPES.SUPPLY && c.properties.enabled);
-  const inverters = components.filter(c => c.type === COMPONENT_TYPES.INVERTER && c.properties.enabled && c.properties.socWh > 0 && !c.properties.isOverloaded);
   
   const phaseSources = [];
   const neutralSources = [];
@@ -125,10 +130,18 @@ export const evaluateNetwork = (components, wires) => {
     earthSources.push(`${supply.id}:E`);
   });
 
+  // Inverter is a source ONLY if NOT in bypass mode (and enabled/charged)
+  const inverters = components.filter(c => 
+      c.type === COMPONENT_TYPES.INVERTER && 
+      c.properties.enabled && 
+      c.properties.socWh > 0 && 
+      !c.properties.isOverloaded &&
+      !c.properties.isBypassMode
+  );
+
   inverters.forEach(inv => {
     phaseSources.push(`${inv.id}:AC_OUT_L`);
     neutralSources.push(`${inv.id}:AC_OUT_N`);
-    // Inverter E terminal is passive, not a source of Earth potential usually (it needs to be earthed)
   });
 
   // 3. BFS Propagation (Energization)

@@ -222,8 +222,11 @@ export const PART_DEFINITIONS = {
       capacityVA: 900,
       batteryWh: 1200,
       socWh: 1200,
+      chargingPowerW: 200, // Charging rate
       enabled: true,
       isOverloaded: false,
+      isBypassMode: false, // Internal relay state: true = Mains->Out, false = Battery->Out
+      status: 'Inverter', // 'Mains (Bypass)' or 'Inverter'
     },
     terminals: [
       { id: 'AC_IN_L', kind: TERMINAL_KINDS.PHASE, relX: -25, relY: -40, label: 'IN-L' },
@@ -237,7 +240,12 @@ export const PART_DEFINITIONS = {
     name: 'Changeover Switch',
     defaultProperties: {
       label: 'CHG-1',
-      position: 'MAINS', // 'MAINS' or 'INVERTER'
+      position: 'MAINS', // 'MAINS', 'INVERTER', 'OFF'
+      mode: 'MANUAL', // 'MANUAL', 'AUTO'
+      transferDelayMs: 200,
+      upsMode: false,
+      autoStatus: 'Using MAINS', // Informational text for UI
+      transferStartTime: 0, // Internal state for delay
     },
     terminals: [
       { id: 'A_L', kind: TERMINAL_KINDS.PHASE, relX: -20, relY: -30, label: 'A-L' }, // Mains

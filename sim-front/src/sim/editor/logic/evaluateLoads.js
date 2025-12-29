@@ -37,6 +37,9 @@ export const evaluateLoads = (components, wires, simulationState, mainsVoltage) 
       else if ((c.type === COMPONENT_TYPES.RCCB || c.type === COMPONENT_TYPES.RCBO) && isClosed) addInternal(phaseGraph, c.id, 'L_OUT', 'L_IN');
       else if (c.type === COMPONENT_TYPES.SWITCH && c.properties.isOn) addInternal(phaseGraph, c.id, 'OUT_L', 'IN_L');
       else if (c.type === COMPONENT_TYPES.METER) addInternal(phaseGraph, c.id, 'OUT_L', 'IN_L');
+      else if (c.type === COMPONENT_TYPES.INVERTER && c.properties.enabled && c.properties.isBypassMode) {
+          addInternal(phaseGraph, c.id, 'AC_IN_L', 'AC_OUT_L');
+      }
       else if (c.type === COMPONENT_TYPES.BUSBAR) {
           const terms = PART_REGISTRY[c.type].terminals;
           terms.forEach(t => { if(t.id !== 'IN') addInternal(phaseGraph, c.id, t.id, 'IN'); });
@@ -50,7 +53,7 @@ export const evaluateLoads = (components, wires, simulationState, mainsVoltage) 
       else if (c.type === COMPONENT_TYPES.CHANGEOVER) {
           if (c.properties.position === 'MAINS') {
              addInternal(phaseGraph, c.id, 'A_L', 'OUT_L');
-          } else {
+          } else if (c.properties.position === 'INVERTER') {
              addInternal(phaseGraph, c.id, 'B_L', 'OUT_L');
           }
       }
@@ -116,20 +119,16 @@ export const evaluateLoads = (components, wires, simulationState, mainsVoltage) 
               };
 
               // Identify Source
-              const sources = findUpstreamSources(termL, phaseGraph, components);
-              let poweredByInverter = false;
-              
-              sources.forEach(srcId => {
-                  const srcComp = components.find(c => c.id === srcId);
-                  if (srcComp && srcComp.type === COMPONENT_TYPES.INVERTER) {
-                      addToDevice(srcId); // Add to specific inverter load
-                      poweredByInverter = true;
-                  }
-              });
-
-              if (poweredByInverter) {
+              const { hasMains, inverterIds } = findUpstreamSources(termL, phaseGraph, components);
+              // If Mains is reachable, it is the active source (inverter may still show voltage via bypass).
+              if (hasMains) {
+                  addToDevice('TOTAL_MAINS');
+              } else if (inverterIds.length > 0) {
+                  // Only count "inverter current" when the inverter is actively supplying (not bypass mode).
+                  addToDevice(inverterIds[0]);
                   addToDevice('TOTAL_INVERTER');
               } else {
+                  // Powered but no explicit source detected; default to MAINS to avoid false inverter drain.
                   addToDevice('TOTAL_MAINS');
               }
               
@@ -172,7 +171,8 @@ function findUpstreamBreakers(startNode, graph, components) {
 }
 
 function findUpstreamSources(startNode, graph, components) {
-    const sources = new Set();
+    let hasMains = false;
+    const inverterIds = new Set();
     const queue = [startNode];
     const visited = new Set();
     visited.add(startNode);
@@ -183,11 +183,18 @@ function findUpstreamSources(startNode, graph, components) {
         const comp = components.find(c => c.id === compId);
 
         if (comp) {
-            if (comp.type === COMPONENT_TYPES.SUPPLY) {
-                sources.add(comp.id);
+            if (comp.type === COMPONENT_TYPES.SUPPLY && comp.properties.enabled) {
+                hasMains = true;
             }
-            if (comp.type === COMPONENT_TYPES.INVERTER && (termId === 'AC_OUT_L' || termId === 'AC_OUT_N')) {
-                sources.add(comp.id);
+            if (
+                comp.type === COMPONENT_TYPES.INVERTER &&
+                comp.properties.enabled &&
+                !comp.properties.isBypassMode &&
+                comp.properties.socWh > 0 &&
+                !comp.properties.isOverloaded &&
+                termId === 'AC_OUT_L'
+            ) {
+                inverterIds.add(comp.id);
             }
         }
 
@@ -199,5 +206,6 @@ function findUpstreamSources(startNode, graph, components) {
             }
         }
     }
-    return Array.from(sources);
+
+    return { hasMains, inverterIds: Array.from(inverterIds) };
 }

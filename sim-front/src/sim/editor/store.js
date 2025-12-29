@@ -5,6 +5,7 @@ import { PART_DEFINITIONS as PART_REGISTRY } from './parts/partDefinitions';
 import { evaluateNetwork } from './logic/evaluateNetwork';
 import { evaluateFaults } from './logic/evaluateFaults';
 import { evaluateLoads } from './logic/evaluateLoads';
+import { evaluateAutoChangeover } from './logic/evaluateAutoChangeover';
 import { validateLesson, getLesson } from './lessons/lessonEngine';
 import { LESSON_PATH } from './lessons/lessonPathSinglePhase';
 
@@ -93,42 +94,53 @@ export const useEditorStore = create(
           // Energy (kWh) = Power (kW) * Time (h)
           const deltaKWh = (totalMainsPowerW / 1000) * dtHours;
 
-          // Inverter Logic (Drain & Overload)
+          // Inverter Logic (Drain & Overload) & Auto Changeover Timers
           let componentsChanged = false;
           let needReeval = false;
 
           const newComponents = components.map(c => {
+             // 1. Inverter Logic
              if (c.type === 'INVERTER' && c.properties.enabled) {
                  const loadStats = simulationState.deviceLoads?.[c.id];
-                 // If the inverter is not powering anything, loadStats might be undefined
                  const loadP = loadStats?.P || 0;
                  const loadS = loadStats?.S || 0;
                  
                  let newSoc = c.properties.socWh;
                  let newOverloaded = false;
 
-                 // Check Overload
-                 if (loadS > c.properties.capacityVA) {
-                     newOverloaded = true;
-                 }
-
-                 // Drain Battery
+                 if (loadS > c.properties.capacityVA) newOverloaded = true;
                  if (c.properties.socWh > 0 && loadP > 0) {
                      newSoc = Math.max(0, c.properties.socWh - (loadP * dtHours));
                  }
 
-                 const socChanged = Math.abs(newSoc - c.properties.socWh) > 0.001; // Epsilon check
+                 const socChanged = Math.abs(newSoc - c.properties.socWh) > 0.001; 
                  const overloadChanged = newOverloaded !== c.properties.isOverloaded;
 
                  if (socChanged || overloadChanged) {
                      componentsChanged = true;
-                     // If battery died (went to 0 from >0), we need to re-evaluate network
-                     if (c.properties.socWh > 0 && newSoc === 0) {
-                         needReeval = true;
-                     }
+                     if (c.properties.socWh > 0 && newSoc === 0) needReeval = true;
                      return { ...c, properties: { ...c.properties, socWh: newSoc, isOverloaded: newOverloaded } };
                  }
              }
+             
+             // 2. Auto Changeover Timer Logic (Completion only)
+             if (c.type === 'CHANGEOVER' && c.properties.mode === 'AUTO' && c.properties.position === 'OFF' && c.properties.targetPosition) {
+                  const elapsed = now - (c.properties.transferStartTime || 0);
+                  if (elapsed >= (c.properties.transferDelay || 0)) {
+                      componentsChanged = true;
+                      needReeval = true; // Circuit re-connects
+                      return { 
+                          ...c, 
+                          properties: { 
+                              ...c.properties, 
+                              position: c.properties.targetPosition, 
+                              targetPosition: null, 
+                              transferStartTime: 0 
+                          } 
+                      };
+                  }
+             }
+
              return c;
           });
 
@@ -164,9 +176,10 @@ export const useEditorStore = create(
 
         // 3. Check Faults & Trip Devices
         const trips = evaluateFaults(components, wires, simState);
-        
+        let networkChanged = false;
+
         if (trips.length > 0) {
-            const newComponents = components.map(c => {
+            components = components.map(c => {
                 const trip = trips.find(t => t.id === c.id);
                 if (trip) {
                     return { ...c, properties: { ...c.properties, ...trip.updates } };
@@ -175,21 +188,32 @@ export const useEditorStore = create(
             });
 
             const newMessages = trips.map(t => ({ id: nanoid(), text: t.msg, type: 'error' }));
-            
-            set(state => ({
-                components: newComponents,
-                messages: [...state.messages, ...newMessages]
-            }));
+            set(state => ({ messages: [...state.messages, ...newMessages] }));
+            networkChanged = true;
+        }
 
-            // Re-evaluate network since topology changed
-            simState = evaluateNetwork(newComponents, wires);
-            // Re-calc loads for new state
-            const loadRes2 = evaluateLoads(newComponents, wires, simState, mainsVoltage);
+        // 4. Check Auto Changeover Updates (Instant status update)
+        const autoUpdates = evaluateAutoChangeover(components, simState);
+        if (autoUpdates.length > 0) {
+            components = components.map(c => {
+                const update = autoUpdates.find(u => u.id === c.id);
+                if (update) {
+                    return { ...c, properties: { ...c.properties, ...update.updates } };
+                }
+                return c;
+            });
+            networkChanged = true;
+        }
+
+        if (networkChanged) {
+            set({ components }); // Update store with tripped/auto-updated components
+            
+            // Re-evaluate network since topology/properties changed
+            simState = evaluateNetwork(components, wires);
+            const loadRes2 = evaluateLoads(components, wires, simState, mainsVoltage);
             simState.loadData = loadRes2.loadData;
             simState.deviceLoads = loadRes2.deviceLoads;
             simState.totalSystemPowerW = loadRes2.totalSystemPowerW;
-            
-            components = newComponents;
         }
 
         let lessonStatus = { passed: false, checklist: [] };

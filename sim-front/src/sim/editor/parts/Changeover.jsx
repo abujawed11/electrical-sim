@@ -10,7 +10,7 @@ export const Changeover = ({ id, type, x, y, isSelected, properties, onSelect, o
   const setHoveredTerminal = useEditorStore((state) => state.setHoveredTerminal);
   const simulationState = useEditorStore((state) => state.simulationState);
 
-  const { label, position } = properties; // 'MAINS' or 'INVERTER'
+  const { label, position, mode, autoStatus } = properties; // 'MAINS', 'INVERTER', or 'OFF'
 
   return (
     <Group
@@ -60,6 +60,14 @@ export const Changeover = ({ id, type, x, y, isSelected, properties, onSelect, o
         align="center"
         listening={false}
       />
+      
+      {/* Auto Badge */}
+      {mode === 'AUTO' && (
+          <Group x={32} y={-35}>
+              <Rect width={24} height={12} fill="#2563EB" cornerRadius={2} />
+              <Text text="AUTO" fontSize={8} fill="white" x={2} y={2} />
+          </Group>
+      )}
 
       {/* Switch Visual */}
       <Group y={0}>
@@ -68,24 +76,24 @@ export const Changeover = ({ id, type, x, y, isSelected, properties, onSelect, o
           <Circle x={10} y={20} radius={2} fill="#9CA3AF" />
 
           {/* Lines based on position */}
-          {position === 'MAINS' ? (
+          {position === 'MAINS' && (
               <>
-                 {/* Connect A to OUT */}
                  <Line points={[-20, -20, -5, 20]} stroke="#10B981" strokeWidth={2} />
                  <Line points={[-5, -20, 10, 20]} stroke="#10B981" strokeWidth={2} />
               </>
-          ) : (
+          )} 
+          {position === 'INVERTER' && (
               <>
-                  {/* Connect B to OUT */}
                   <Line points={[20, -20, -5, 20]} stroke="#F59E0B" strokeWidth={2} />
                   <Line points={[35, -20, 10, 20]} stroke="#F59E0B" strokeWidth={2} />
               </>
           )}
+          {/* OFF state shows no connection lines */}
 
           <Text 
-            text={position} 
-            fontSize={10} 
-            fill={position === 'MAINS' ? '#10B981' : '#F59E0B'} 
+            text={mode === 'AUTO' ? autoStatus : position} 
+            fontSize={8} 
+            fill={position === 'MAINS' ? '#10B981' : (position === 'INVERTER' ? '#F59E0B' : '#9CA3AF')} 
             y={-5} 
             width={90}
             offsetX={45}
