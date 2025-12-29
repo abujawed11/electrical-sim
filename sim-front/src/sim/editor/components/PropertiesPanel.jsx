@@ -71,7 +71,7 @@ export const PropertiesPanel = () => {
     });
   };
 
-  const isLoad = [COMPONENT_TYPES.LAMP, COMPONENT_TYPES.GENERIC_LOAD, COMPONENT_TYPES.FAN, COMPONENT_TYPES.AC, COMPONENT_TYPES.HEATER, COMPONENT_TYPES.GEYSER].includes(selectedComponent.type);
+  const isLoad = [COMPONENT_TYPES.LAMP, COMPONENT_TYPES.GENERIC_LOAD, COMPONENT_TYPES.FAN, COMPONENT_TYPES.AC, COMPONENT_TYPES.HEATER, COMPONENT_TYPES.GEYSER, COMPONENT_TYPES.LOAD_3P_BALANCED].includes(selectedComponent.type);
   const isBreaker = selectedComponent.type === COMPONENT_TYPES.MCB || selectedComponent.type === COMPONENT_TYPES.RCBO || selectedComponent.type === COMPONENT_TYPES.MCB_3P;
   const isRCCB = selectedComponent.type === COMPONENT_TYPES.RCCB;
 
@@ -101,16 +101,30 @@ export const PropertiesPanel = () => {
             <div className="p-3 bg-gray-900 rounded border border-gray-700 space-y-3">
                 <div className="text-xs font-bold text-gray-400 uppercase tracking-wider">Electrical Load</div>
                 
-                <div className="space-y-1">
-                    <label className="text-xs text-gray-400 block">Power (Watts)</label>
-                    <input
-                        type="number"
-                        min="0"
-                        value={selectedComponent.properties.powerW || 0}
-                        onChange={(e) => handlePropChange('powerW', parseFloat(e.target.value))}
-                        className="w-full bg-gray-800 border border-gray-600 rounded px-2 py-1 text-white"
-                    />
-                </div>
+                {selectedComponent.type === COMPONENT_TYPES.LOAD_3P_BALANCED ? (
+                    <div className="space-y-1">
+                        <label className="text-xs text-gray-400 block">Power (kW)</label>
+                        <input
+                            type="number"
+                            min="0"
+                            step="0.1"
+                            value={selectedComponent.properties.powerKW || 0}
+                            onChange={(e) => handlePropChange('powerKW', parseFloat(e.target.value))}
+                            className="w-full bg-gray-800 border border-gray-600 rounded px-2 py-1 text-white"
+                        />
+                    </div>
+                ) : (
+                    <div className="space-y-1">
+                        <label className="text-xs text-gray-400 block">Power (Watts)</label>
+                        <input
+                            type="number"
+                            min="0"
+                            value={selectedComponent.properties.powerW || 0}
+                            onChange={(e) => handlePropChange('powerW', parseFloat(e.target.value))}
+                            className="w-full bg-gray-800 border border-gray-600 rounded px-2 py-1 text-white"
+                        />
+                    </div>
+                )}
 
                 <div className="grid grid-cols-2 gap-2">
                     <div className="space-y-1">
@@ -223,7 +237,7 @@ export const PropertiesPanel = () => {
            </div>
         )}
 
-        {selectedComponent.type === COMPONENT_TYPES.SUPPLY && (
+        {(selectedComponent.type === COMPONENT_TYPES.SUPPLY || selectedComponent.type === COMPONENT_TYPES.SUPPLY_3P) && (
            <div className="space-y-2">
                <div className="flex items-center justify-between p-2 bg-gray-700 rounded">
                   <span className="text-gray-200 text-sm">Mains Power</span>
@@ -238,6 +252,17 @@ export const PropertiesPanel = () => {
                     {selectedComponent.properties.enabled ? 'ENABLED' : 'DISABLED'}
                   </button>
                </div>
+               {selectedComponent.type === COMPONENT_TYPES.SUPPLY_3P && (
+                   <div className="space-y-1">
+                       <label className="text-xs text-gray-400 block">Voltage (Phase-Phase)</label>
+                       <input
+                           type="number"
+                           value={selectedComponent.properties.voltage || 415}
+                           onChange={(e) => handlePropChange('voltage', parseFloat(e.target.value))}
+                           className="w-full bg-gray-900 border border-gray-600 rounded px-2 py-1 text-white"
+                       />
+                   </div>
+               )}
                <div className="p-2 bg-gray-900 rounded border border-gray-700">
                    <div className="text-gray-400 text-xs">Total System Load</div>
                    <div className="text-yellow-400 font-mono text-xl">
@@ -251,6 +276,50 @@ export const PropertiesPanel = () => {
            </div>
         )}
         
+        {/* Transformer Properties */}
+        {selectedComponent.type === COMPONENT_TYPES.TRANSFORMER_3P && (
+            <div className="space-y-3">
+                <div className="space-y-1">
+                    <label className="text-xs text-gray-400 block">kVA Rating</label>
+                    <input
+                        type="number"
+                        value={selectedComponent.properties.kVA || 100}
+                        onChange={(e) => handlePropChange('kVA', parseFloat(e.target.value))}
+                        className="w-full bg-gray-900 border border-gray-600 rounded px-2 py-1 text-white"
+                    />
+                </div>
+                <div className="space-y-1">
+                    <label className="text-xs text-gray-400 block">Primary Voltage (V)</label>
+                    <input
+                        type="number"
+                        value={selectedComponent.properties.primaryVoltage || 11000}
+                        onChange={(e) => handlePropChange('primaryVoltage', parseFloat(e.target.value))}
+                        className="w-full bg-gray-900 border border-gray-600 rounded px-2 py-1 text-white"
+                    />
+                </div>
+                <div className="space-y-1">
+                    <label className="text-xs text-gray-400 block">Secondary Voltage (V)</label>
+                    <input
+                        type="number"
+                        value={selectedComponent.properties.secondaryVoltage || 415}
+                        onChange={(e) => handlePropChange('secondaryVoltage', parseFloat(e.target.value))}
+                        className="w-full bg-gray-900 border border-gray-600 rounded px-2 py-1 text-white"
+                    />
+                </div>
+                <div className="space-y-1">
+                    <label className="text-xs text-gray-400 block">Connection</label>
+                    <select
+                        value={selectedComponent.properties.connection || 'DELTA_STAR'}
+                        onChange={(e) => handlePropChange('connection', e.target.value)}
+                        className="w-full bg-gray-900 border border-gray-600 rounded px-2 py-1 text-white text-xs"
+                    >
+                        <option value="DELTA_STAR">Delta-Star (Dyn11)</option>
+                        <option value="STAR_STAR">Star-Star</option>
+                    </select>
+                </div>
+            </div>
+        )}
+
         {/* Socket Status Display */}
         {selectedComponent.type === COMPONENT_TYPES.SOCKET && (
             <div className="p-3 bg-gray-900 rounded border border-gray-700 space-y-2">
