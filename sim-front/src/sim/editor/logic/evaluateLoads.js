@@ -11,14 +11,14 @@ import { PART_DEFINITIONS as PART_REGISTRY } from '../parts/partDefinitions';
  * @returns {Object} { loadData, deviceLoads, totalSystemPowerW }
  */
 export const evaluateLoads = (components, wires, simulationState, mainsVoltage) => {
-  const loadData = {}; 
-  const deviceLoads = { 
+  const loadData = {};
+  const deviceLoads = {
       'TOTAL_MAINS': { I_real: 0, I_imag: 0, currentA: 0, P: 0, S: 0, Q: 0 },
       'TOTAL_INVERTER': { I_real: 0, I_imag: 0, currentA: 0, P: 0, S: 0, Q: 0 }
-  }; 
+  };
   let totalSystemPowerW = 0;
 
-  const { livePhaseSet, neutralSet } = simulationState;
+  const { livePhaseSet, neutralSet, phaseRSet, phaseYSet, phaseBSet } = simulationState;
 
   // 1. Build Phase Graph
   const phaseGraph = new Map();
@@ -133,6 +133,71 @@ export const evaluateLoads = (components, wires, simulationState, mainsVoltage) 
               }
               
               const breakers = findUpstreamBreakers(termL, phaseGraph, components);
+              breakers.forEach(bId => addToDevice(bId));
+          }
+      }
+
+      // 3-Phase Balanced Loads (Motors, etc.)
+      else if (comp.type === COMPONENT_TYPES.LOAD_3P_BALANCED) {
+          const P_total = (comp.properties.powerKW || 0) * 1000; // Convert kW to W
+          const pf = comp.properties.powerFactor || 0.85;
+          const lineVoltage = 415; // 3-phase line voltage (R-Y, Y-B, B-R)
+
+          // Check if all 3 phases are present
+          const termR = `${comp.id}:R`;
+          const termY = `${comp.id}:Y`;
+          const termB = `${comp.id}:B`;
+
+          const hasR = phaseRSet.has(termR) || livePhaseSet.has(termR);
+          const hasY = phaseYSet.has(termY) || livePhaseSet.has(termY);
+          const hasB = phaseBSet.has(termB) || livePhaseSet.has(termB);
+
+          const isPowered = hasR && hasY && hasB;
+          const phasesPresent = [hasR, hasY, hasB].filter(Boolean).length;
+
+          // 3-Phase Power Calculations
+          // P_total = √3 × V_line × I_line × PF
+          // I_line = P_total / (√3 × V_line × PF)
+          const S_total = isPowered ? P_total / pf : 0;
+          const I_line = isPowered ? S_total / (Math.sqrt(3) * lineVoltage) : 0;
+          const Q_total = isPowered ? Math.sqrt(Math.max(0, S_total**2 - P_total**2)) : 0;
+
+          // Per-phase values (for balanced load)
+          const P_per_phase = P_total / 3;
+          const I_real_per_phase = isPowered ? (P_per_phase / (lineVoltage / Math.sqrt(3))) : 0;
+          const I_imag_per_phase = isPowered ? (Q_total / 3 / (lineVoltage / Math.sqrt(3))) : 0;
+
+          loadData[comp.id] = {
+              currentA: I_line,
+              powerW: P_total,
+              apparentVA: S_total,
+              reactiveVAR: Q_total,
+              powerFactor: pf,
+              isPowered,
+              phasesPresent,
+              hasPhaseImbalance: phasesPresent > 0 && phasesPresent < 3,
+              I_real: I_real_per_phase * 3, // Total for tracking
+              I_imag: I_imag_per_phase * 3
+          };
+
+          if (isPowered) {
+              totalSystemPowerW += P_total;
+
+              const addToDevice = (id) => {
+                  if (!deviceLoads[id]) deviceLoads[id] = { I_real: 0, I_imag: 0, currentA: 0, P: 0, S: 0, Q: 0 };
+                  deviceLoads[id].I_real += I_real_per_phase * 3;
+                  deviceLoads[id].I_imag += I_imag_per_phase * 3;
+                  deviceLoads[id].P += P_total;
+                  deviceLoads[id].Q += Q_total;
+                  deviceLoads[id].currentA = Math.sqrt(deviceLoads[id].I_real**2 + deviceLoads[id].I_imag**2);
+                  deviceLoads[id].S = Math.sqrt(deviceLoads[id].P**2 + deviceLoads[id].Q**2);
+              };
+
+              // 3-phase loads are typically mains-powered
+              // TODO: Track upstream from each phase separately
+              addToDevice('TOTAL_MAINS');
+
+              const breakers = findUpstreamBreakers(termR, phaseGraph, components);
               breakers.forEach(bId => addToDevice(bId));
           }
       }

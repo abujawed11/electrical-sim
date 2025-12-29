@@ -150,11 +150,12 @@ export const evaluateNetwork = (components, wires) => {
   });
 
   // Inverters (Source if active and NOT in bypass)
-  components.filter(c => 
-      c.type === COMPONENT_TYPES.INVERTER && 
-      c.properties.enabled && 
-      c.properties.socWh > 0 && 
-      !c.properties.isOverloaded &&
+  // NOTE: Don't check isOverloaded - inverter continues outputting during alarm period
+  // It only stops when enabled=false (after shutdown delay)
+  components.filter(c =>
+      c.type === COMPONENT_TYPES.INVERTER &&
+      c.properties.enabled &&
+      c.properties.socWh > 0 &&
       !c.properties.isBypassMode
   ).forEach(inv => {
       genericPhaseSources.push(`${inv.id}:AC_OUT_L`);

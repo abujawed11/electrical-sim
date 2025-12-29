@@ -11,7 +11,7 @@ import { PART_DEFINITIONS as PART_REGISTRY } from '../parts/partDefinitions';
  */
 export const evaluateFaults = (components, wires, simulationState) => {
   const tripActions = [];
-  const { livePhaseSet, neutralSet, earthSet } = simulationState;
+  const { livePhaseSet, neutralSet, earthSet, phaseRSet, phaseYSet, phaseBSet } = simulationState;
 
   // Helper: Build an upstream graph for Phase to trace back to source
   // We need to know "Who feeds whom?". 
@@ -129,6 +129,65 @@ export const evaluateFaults = (components, wires, simulationState) => {
                   updates: { isTripped: true, isOn: false }, 
                   reason: reason,
                   msg: `${reason === 'SHOCK_DETECTED' ? 'Shock Risk' : 'Leakage'} detected! Tripped ${breaker.properties.label}`
+              });
+          }
+      }
+  });
+
+  // 3. Phase-to-Phase Short Circuit (3-Phase Systems)
+  // Check if different phases are shorted together (R-Y, Y-B, or R-B)
+  if (phaseRSet && phaseYSet && phaseBSet) {
+      // Find nodes that are energized by multiple phases
+      const ryShorts = [...phaseRSet].filter(x => phaseYSet.has(x));
+      const ybShorts = [...phaseYSet].filter(x => phaseBSet.has(x));
+      const rbShorts = [...phaseRSet].filter(x => phaseBSet.has(x));
+
+      const phaseShorts = [...new Set([...ryShorts, ...ybShorts, ...rbShorts])];
+
+      if (phaseShorts.length > 0) {
+          const shortNode = phaseShorts[0];
+          const breaker = findUpstreamBreaker(shortNode, phaseGraph, components, 'SHORT');
+          if (breaker) {
+              let phasesPair = 'R-Y';
+              if (ybShorts.includes(shortNode)) phasesPair = 'Y-B';
+              else if (rbShorts.includes(shortNode)) phasesPair = 'R-B';
+
+              tripActions.push({
+                  id: breaker.id,
+                  updates: { isTripped: true, isOn: false },
+                  reason: 'PHASE_PHASE_SHORT',
+                  msg: `Phase-to-Phase Short Circuit (${phasesPair}) detected! Tripped ${breaker.properties.label}`
+              });
+          }
+      }
+  }
+
+  // 4. Missing Phase Warning for 3-Phase Equipment
+  // Check if 3-phase loads have incomplete phase supply (single-phasing)
+  components.forEach(comp => {
+      if (comp.type === COMPONENT_TYPES.LOAD_3P_BALANCED || comp.type === COMPONENT_TYPES.TRANSFORMER_3P) {
+          const termR = `${comp.id}:${comp.type === COMPONENT_TYPES.TRANSFORMER_3P ? 'PRI_R' : 'R'}`;
+          const termY = `${comp.id}:${comp.type === COMPONENT_TYPES.TRANSFORMER_3P ? 'PRI_Y' : 'Y'}`;
+          const termB = `${comp.id}:${comp.type === COMPONENT_TYPES.TRANSFORMER_3P ? 'PRI_B' : 'B'}`;
+
+          const hasR = (phaseRSet && phaseRSet.has(termR)) || livePhaseSet.has(termR);
+          const hasY = (phaseYSet && phaseYSet.has(termY)) || livePhaseSet.has(termY);
+          const hasB = (phaseBSet && phaseBSet.has(termB)) || livePhaseSet.has(termB);
+
+          const phasesPresent = [hasR, hasY, hasB].filter(Boolean).length;
+
+          // Single-phasing: 1 or 2 phases present (not 0 or 3)
+          if (phasesPresent > 0 && phasesPresent < 3) {
+              const missingPhases = [];
+              if (!hasR) missingPhases.push('R');
+              if (!hasY) missingPhases.push('Y');
+              if (!hasB) missingPhases.push('B');
+
+              tripActions.push({
+                  id: comp.id,
+                  updates: {}, // No property change, just a warning
+                  reason: 'SINGLE_PHASING',
+                  msg: `⚠️ Single-Phasing on ${comp.properties.label}! Missing phase(s): ${missingPhases.join(', ')}. Equipment may overheat or fail!`
               });
           }
       }
