@@ -310,60 +310,355 @@ Motor won't run if any phase is missing (realistic behavior).
   },
   {
     id: 'T8',
-    title: '🎓 Congratulations - 3-Phase Basics Complete!',
+    title: '3-Phase in Your HOME!',
     description: `
-🎉 YOU'VE MASTERED 3-PHASE BASICS!
+🏠 3-PHASE SUPPLY FOR HOMES
+
+Wait... 3-Phase is not just for factories! Large homes also use it!
+
+❓ WHY WOULD A HOME NEED 3-PHASE?
+
+Your home needs 3-phase if you have:
+• Multiple ACs (2-3 units) - Heavy load!
+• Electric geyser (2000W) + AC running together
+• Washing machine + Dryer + Microwave
+• Total load > 7-8 kW
+
+🔌 WHAT YOU GET FROM ELECTRICITY BOARD:
+
+Single-Phase Home:
+  - 2 wires: L (Phase) + N (Neutral) + E (Earth)
+  - Voltage: 230V only
+  - Max load: ~5-7 kW
+
+3-Phase Home:
+  - 4 wires: R + Y + B + N + E
+  - Voltages: 230V (each phase) + 415V (between phases)
+  - Max load: ~15-20 kW (distributed)
+
+📊 HOW IT WORKS IN YOUR HOME:
+
+The electricity board gives you 3 phases, but:
+• Kitchen gets R phase (Geyser, Microwave)
+• Bedroom 1 gets Y phase (AC-1, Lights)
+• Bedroom 2 gets B phase (AC-2, Lights)
+• All share the same Neutral (N)
+
+Each room gets 230V (just like single-phase)!
+
+🎯 YOUR TASK: Understand why homes need 3-phase.
+(This is educational - click anywhere to continue)
+`,
+    allowedParts: [COMPONENT_TYPES.SUPPLY_3P],
+    checklist: [
+      { id: 'understand', label: 'Understand 3-phase in homes' },
+    ],
+    validate: () => true, // Auto-pass
+  },
+  {
+    id: 'T9',
+    title: '3-Phase Energy Meter',
+    description: `
+⚡ 3-PHASE ENERGY METER (The Difference!)
+
+❓ DO I NEED A DIFFERENT METER?
+
+YES! 3-phase homes need a **3-phase energy meter**.
+
+📊 SINGLE-PHASE METER:
+Terminals: L-IN, N-IN, L-OUT, N-OUT (4 terminals)
+Measures: Power from 1 phase only
+
+📊 3-PHASE METER:
+Terminals: R-IN, Y-IN, B-IN, N-IN, R-OUT, Y-OUT, B-OUT, N-OUT (8 terminals!)
+Measures: Power from ALL 3 phases combined
+
+🔌 HOW TO CONNECT:
+
+FROM SUPPLY:
+• Supply R → Meter R-IN
+• Supply Y → Meter Y-IN
+• Supply B → Meter B-IN
+• Supply N → Meter N-IN
+
+TO YOUR HOME:
+• Meter R-OUT → Distribution board (Phase R loads)
+• Meter Y-OUT → Distribution board (Phase Y loads)
+• Meter B-OUT → Distribution board (Phase B loads)
+• Meter N-OUT → Neutral bar
+
+💡 THE METER READS:
+Total kWh = kWh(R) + kWh(Y) + kWh(B)
+
+Even if R-phase has 100 units, Y has 80, B has 70...
+Your bill shows: 250 units total!
+
+⚠️ IMPORTANT:
+The meter doesn't care about balance. But YOU should balance loads to avoid:
+• Overheating of one phase
+• Neutral current issues
+• Voltage imbalance
+
+🎯 YOUR TASK: We don't have a 3-phase meter component yet, so just understand the concept!
+(Click to continue)
+`,
+    allowedParts: [COMPONENT_TYPES.SUPPLY_3P],
+    checklist: [
+      { id: 'understand_meter', label: 'Understand 3-phase meter connections' },
+    ],
+    validate: () => true, // Auto-pass
+  },
+  {
+    id: 'T10',
+    title: 'Load Distribution Strategy',
+    description: `
+⚖️ DISTRIBUTING LOADS ACROSS PHASES
+
+This is THE MOST IMPORTANT part of home 3-phase wiring!
+
+🎯 THE GOLDEN RULE: BALANCE YOUR LOADS!
+
+❌ BAD DISTRIBUTION:
+R Phase: Geyser (2000W) + AC (1500W) + Kitchen (1000W) = 4500W (OVERLOADED!)
+Y Phase: 2 LEDs (30W) = 30W (Almost nothing)
+B Phase: TV (100W) = 100W (Almost nothing)
+
+Result: R-phase MCB trips, wire overheats, bill is high!
+
+✅ GOOD DISTRIBUTION:
+R Phase: Geyser (2000W) + Bedroom 1 lights (200W) = 2200W
+Y Phase: AC-1 (1500W) + Kitchen (500W) = 2000W
+B Phase: AC-2 (1500W) + Bedroom 2 (300W) = 1800W
+
+Result: All phases balanced (~2000W each), smooth operation!
+
+📋 ROOM-WISE DISTRIBUTION EXAMPLE:
+
+🏠 2-BHK Flat with 3-Phase:
+
+R PHASE (RED):
+• Master Bedroom AC (1500W)
+• Hall lights + fans (300W)
+• Total: ~1800W
+
+Y PHASE (YELLOW):
+• Kitchen (Microwave 1200W, lights 100W)
+• Bedroom 1 (lights, fan 200W)
+• Total: ~1500W
+
+B PHASE (BLUE):
+• Bathroom Geyser (2000W)
+• Bedroom 2 (AC 1500W)
+• Total: Varies (geyser not always on)
+
+💡 PRO TIP: Put geyser on a separate MCB with timer!
+
+🎯 YOUR TASK: Plan which room gets which phase.
+(This is planning - click to continue)
+`,
+    allowedParts: [COMPONENT_TYPES.SUPPLY_3P],
+    checklist: [
+      { id: 'understand_distribution', label: 'Understand load distribution strategy' },
+    ],
+    validate: () => true, // Auto-pass
+  },
+  {
+    id: 'T11',
+    title: 'Building a 3-Phase Home Distribution',
+    description: `
+🔧 COMPLETE HOME WIRING SETUP
+
+Let's wire a real home with 3-phase supply!
+
+📊 THE COMPLETE FLOW:
+
+1. Electricity Board Pole → 3-Phase Supply (R, Y, B, N, E)
+2. 3-Phase Energy Meter (Measures total kWh)
+3. Main Isolator (3-pole MCB - 63A)
+4. Distribution Board with 3 Busbars:
+   - R Phase Busbar (RED)
+   - Y Phase Busbar (YELLOW)
+   - B Phase Busbar (BLUE)
+   - Neutral Bar (BLACK)
+   - Earth Bar (GREEN)
+
+5. Individual MCBs from Each Busbar:
+   - From R Busbar: MCB-1 (16A) → Master Bedroom AC
+   - From Y Busbar: MCB-2 (16A) → Kitchen circuit
+   - From B Busbar: MCB-3 (25A) → Geyser
+   - ... (more circuits)
+
+🎯 YOUR TASK: Build this setup in the simulator!
+
+STEPS:
+1. Place 3-Phase Supply
+2. Wire it to 3-Phase Motor (pretend it's your distribution board)
+3. Check all phases are energized
+
+(In a real setup, you'd have busbars and MCBs for each phase)
+`,
+    allowedParts: [COMPONENT_TYPES.SUPPLY_3P, COMPONENT_TYPES.LOAD_3P_BALANCED],
+    checklist: [
+      { id: 'place_supply', label: 'Place 3-Phase Supply' },
+      { id: 'place_load', label: 'Place 3-Phase Load (Distribution)' },
+      { id: 'wire_all', label: 'Wire R, Y, B, E correctly' },
+    ],
+    validate: (components, wires) => {
+        const supply = components.find(c => c.type === COMPONENT_TYPES.SUPPLY_3P);
+        const load = components.find(c => c.type === COMPONENT_TYPES.LOAD_3P_BALANCED);
+        if (!supply || !load) return false;
+
+        const isConn = (t1, t2) => wires.some(w =>
+            (w.from.compId === supply.id && w.from.terminalId === t1 && w.to.compId === load.id && w.to.terminalId === t2) ||
+            (w.from.compId === load.id && w.from.terminalId === t2 && w.to.compId === supply.id && w.to.terminalId === t1)
+        );
+
+        return isConn('R', 'R') && isConn('Y', 'Y') && isConn('B', 'B') && isConn('E', 'E');
+    }
+  },
+  {
+    id: 'T12',
+    title: '⚖️ Balanced vs Unbalanced Loads',
+    description: `
+⚖️ UNDERSTANDING LOAD BALANCE IN HOMES
+
+Unlike factories (motors = perfectly balanced), homes are ALWAYS unbalanced!
+
+🏠 REAL HOME SCENARIO:
+
+Morning 7 AM:
+R: Geyser ON (2000W), Lights OFF
+Y: Kitchen Microwave ON (1200W)
+B: Nothing (0W)
+
+Total Imbalance! But that's NORMAL for homes!
+
+📊 WHAT HAPPENS DURING IMBALANCE:
+
+Currents:
+• R Phase: 2000W ÷ 230V = 8.7A
+• Y Phase: 1200W ÷ 230V = 5.2A
+• B Phase: 0W ÷ 230V = 0A
+
+Neutral Current:
+• NOT zero! (unlike balanced loads)
+• ~4-5A flows in neutral wire
+
+⚠️ POTENTIAL PROBLEMS:
+
+❌ If Neutral Wire Breaks:
+• Phases with heavy load get LOW voltage (200V)
+• Phases with light load get HIGH voltage (250V)
+• Appliances can BURN!
+
+❌ If One Phase Overloaded Consistently:
+• That phase's wire overheats
+• MCB trips frequently
+• Higher electricity bill (power factor issues)
+
+✅ HOW TO AVOID:
+
+1. **Design Time**: Distribute loads evenly across R, Y, B
+2. **Installation**: Use proper wire size for each phase
+3. **Neutral**: NEVER use undersized neutral (same as phase!)
+4. **Protection**: Individual MCBs for each phase circuit
+5. **Monitoring**: Check which phase trips often, redistribute
+
+💡 SMART HOME TIP:
+Use smart meters to monitor per-phase consumption. Apps show:
+• R Phase: 45A (Heavy!)
+• Y Phase: 12A
+• B Phase: 18A
+
+Then you can move some appliances to balance!
+
+🎯 YOUR TASK: Understand why balancing matters in homes.
+`,
+    allowedParts: [COMPONENT_TYPES.SUPPLY_3P],
+    checklist: [
+      { id: 'understand_balance', label: 'Understand balanced vs unbalanced loads' },
+    ],
+    validate: () => true, // Auto-pass
+  },
+  {
+    id: 'T13',
+    title: '🎓 3-Phase Home Wiring Complete!',
+    description: `
+🎉 YOU'VE MASTERED 3-PHASE HOME WIRING!
 
 ✅ What you learned:
-• What is 3-phase power (3 people pushing a car!)
-• Phase voltage vs Line voltage (230V vs 415V)
-• How to connect a 3-phase motor (R-R, Y-Y, B-B)
-• What transformers do (voltage up/down)
-• How to wire transformer primary & secondary
-• Dangers of single-phasing (motor killer!)
 
-📊 QUICK RECAP:
+🏠 HOME 3-PHASE BASICS:
+• Why homes need 3-phase (heavy loads > 7kW)
+• What you get: R, Y, B phases + Neutral
+• Each room can get a different phase
 
-🔌 3-Phase Power:
-• 3 phases: R, Y, B (120° apart)
-• Constant power (unlike single-phase)
-• Used in motors, factories, industries
+⚡ ENERGY METER:
+• 3-phase meter has 8 terminals (R-IN/OUT, Y-IN/OUT, B-IN/OUT, N-IN/OUT)
+• Measures total consumption from all 3 phases
+• Billing = kWh(R) + kWh(Y) + kWh(B)
 
-⚡ Voltages:
-• Phase Voltage (Vph) = 230V (R-to-N)
-• Line Voltage (VL) = 415V (R-to-Y)
-• Formula: VL = √3 × Vph = 1.732 × 230V
+⚖️ LOAD DISTRIBUTION:
+• Distribute loads EVENLY across R, Y, B
+• Example: AC on R, Geyser on Y, Kitchen on B
+• Avoid overloading one phase
 
-🔧 Connections:
-• Motor: Connect R-R, Y-Y, B-B
-• Transformer: HV side (11kV) → LV side (415V)
-• Always connect Earth for safety!
+🔧 WIRING SETUP:
+• Supply → Meter → Main MCB → Busbars (R, Y, B, N, E)
+• Individual MCBs from each busbar
+• Each circuit gets one phase + neutral
 
-⚠️ Safety:
-• NEVER work on live HV equipment
-• Single-phasing burns motors
-• Always install protection relays
+⚠️ SAFETY & BALANCE:
+• Homes are naturally unbalanced (appliances turn on/off)
+• Neutral wire is CRITICAL (same size as phase!)
+• If neutral breaks = disaster (voltage imbalance)
+• Monitor phase loads, redistribute if needed
+
+📊 REAL-WORLD EXAMPLE:
+
+3-BHK Flat (3-Phase Supply):
+• R Phase: Master Bedroom (AC + lights) = 2kW
+• Y Phase: Kitchen (all appliances) = 1.5kW
+• B Phase: Bedroom 2 (AC + lights) + Geyser = 2.2kW
+• Total: ~5.7kW (well balanced!)
+
+Main MCB: 40A (3-pole)
+Individual MCBs:
+  - R: 16A (bedroom circuit)
+  - Y: 16A (kitchen circuit)
+  - B: 25A (geyser + bedroom)
+
+💡 WHEN TO CHOOSE 3-PHASE FOR YOUR HOME:
+
+✅ Choose 3-Phase if:
+• Total load > 7 kW
+• Multiple ACs (2+)
+• Electric geyser + ACs run together
+• Electricity board offers it
+
+❌ Stick to Single-Phase if:
+• Small home (1-2 BHK)
+• Total load < 5 kW
+• Only 1 AC + basic appliances
+• Simpler, cheaper installation
 
 🎯 NEXT STEPS:
 
-Want to learn more? Check out:
-• Advanced 3-phase lessons (coming soon!)
-• Transformer connections (Star, Delta)
-• Motor starting methods
-• Protection systems
+You now know:
+• Industrial 3-phase (motors, transformers)
+• Residential 3-phase (home distribution)
 
-🎓 PRACTICE TIME:
-Try building a complete factory setup:
-1. 3-Phase Supply (11kV)
-2. Transformer (11kV → 415V)
-3. Multiple motors on secondary
-4. Protection devices (MCBs, relays)
+Want more? Try:
+• Build a complete 3-BHK wiring diagram
+• Calculate MCB ratings for each phase
+• Learn about 3-phase EV chargers
+• Explore solar inverters (3-phase)
 
-You're now ready for industrial electrical systems! ⚡🏭
+🏆 CONGRATULATIONS! You're now a 3-Phase Expert! ⚡🏠
 `,
     allowedParts: Object.values(COMPONENT_TYPES), // Allow all components
     checklist: [
-      { id: 'complete', label: 'Complete 3-Phase Basics Path' },
+      { id: 'complete', label: 'Complete 3-Phase Home Wiring Path' },
     ],
     validate: () => true, // Auto-pass - congratulations screen
   }

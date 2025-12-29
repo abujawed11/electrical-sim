@@ -11,7 +11,12 @@ export const LessonPanel = () => {
   const startLesson = useEditorStore((state) => state.startLesson);
 
   const [showLessonMenu, setShowLessonMenu] = useState(false);
+  const [position, setPosition] = useState({ x: 288, y: 16 }); // Default position (left-72 = 288px, top-4 = 16px)
+  const [isDragging, setIsDragging] = useState(false);
+  const [dragOffset, setDragOffset] = useState({ x: 0, y: 0 });
+
   const menuRef = useRef(null);
+  const panelRef = useRef(null);
 
   // Close menu when clicking outside
   useEffect(() => {
@@ -27,6 +32,42 @@ export const LessonPanel = () => {
     }
   }, [showLessonMenu]);
 
+  // Dragging functionality
+  const handleMouseDown = (e) => {
+    // Only allow dragging from the header area
+    if (e.target.closest('.drag-handle')) {
+      setIsDragging(true);
+      setDragOffset({
+        x: e.clientX - position.x,
+        y: e.clientY - position.y
+      });
+    }
+  };
+
+  useEffect(() => {
+    const handleMouseMove = (e) => {
+      if (isDragging) {
+        setPosition({
+          x: e.clientX - dragOffset.x,
+          y: e.clientY - dragOffset.y
+        });
+      }
+    };
+
+    const handleMouseUp = () => {
+      setIsDragging(false);
+    };
+
+    if (isDragging) {
+      document.addEventListener('mousemove', handleMouseMove);
+      document.addEventListener('mouseup', handleMouseUp);
+      return () => {
+        document.removeEventListener('mousemove', handleMouseMove);
+        document.removeEventListener('mouseup', handleMouseUp);
+      };
+    }
+  }, [isDragging, dragOffset]);
+
   if (mode !== 'GUIDED') return null;
 
   const lesson = getLesson(activeLessonId);
@@ -37,14 +78,27 @@ export const LessonPanel = () => {
   const threePhase = ALL_LESSONS.filter(l => l.id.startsWith('T'));
 
   return (
-    <div className="absolute top-4 left-72 bg-gray-800 border border-gray-600 rounded-lg p-4 w-96 shadow-lg text-white">
-      <div className="flex justify-between items-center mb-2">
-         <h2 className="text-lg font-bold text-blue-400">{lesson.title}</h2>
+    <div
+      ref={panelRef}
+      className="absolute bg-gray-800 border border-gray-600 rounded-lg p-4 w-96 shadow-lg text-white"
+      style={{
+        left: `${position.x}px`,
+        top: `${position.y}px`,
+        cursor: isDragging ? 'grabbing' : 'default',
+        userSelect: isDragging ? 'none' : 'auto'
+      }}
+      onMouseDown={handleMouseDown}
+    >
+      <div className="drag-handle flex justify-between items-center mb-2 cursor-grab active:cursor-grabbing -mx-4 -mt-4 px-4 py-3 bg-gray-700 rounded-t-lg border-b border-gray-600">
          <div className="flex items-center gap-2">
-           <span className="text-xs text-gray-400">{lesson.id}</span>
+           <span className="text-gray-400 pointer-events-none" title="Drag to move">⋮⋮</span>
+           <h2 className="text-lg font-bold text-blue-400 pointer-events-none">{lesson.title}</h2>
+         </div>
+         <div className="flex items-center gap-2">
+           <span className="text-xs text-gray-400 pointer-events-none">{lesson.id}</span>
            <button
              onClick={() => setShowLessonMenu(!showLessonMenu)}
-             className="px-2 py-1 bg-gray-700 hover:bg-gray-600 rounded text-xs"
+             className="px-2 py-1 bg-gray-600 hover:bg-gray-500 rounded text-xs pointer-events-auto"
              title="Jump to lesson"
            >
              📚 Menu
@@ -115,8 +169,8 @@ export const LessonPanel = () => {
         </div>
       )}
 
-
-      <p className="text-sm text-gray-300 mb-4 whitespace-pre-line">{lesson.description}</p>
+      <div className="mt-4">
+        <p className="text-sm text-gray-300 mb-4 whitespace-pre-line">{lesson.description}</p>
       
       <div className="bg-gray-900 rounded p-3 mb-4 space-y-2">
          <h3 className="text-xs font-bold uppercase text-gray-500 mb-1">Objectives</h3>
@@ -134,25 +188,26 @@ export const LessonPanel = () => {
          ))}
       </div>
 
-      <div className="flex justify-between mt-2">
-         <button 
-             onClick={prevLesson}
-             className="px-3 py-1 bg-gray-700 hover:bg-gray-600 rounded text-sm disabled:opacity-50"
-             disabled={activeLessonId === 'L0'}
-         >
-             Previous
-         </button>
-         <button 
-             onClick={nextLesson}
-             className={`px-3 py-1 rounded text-sm font-bold ${
-                 lessonStatus.passed 
-                 ? 'bg-blue-600 hover:bg-blue-500 text-white' 
-                 : 'bg-gray-700 text-gray-500 cursor-not-allowed'
-             }`}
-             disabled={!lessonStatus.passed}
-         >
-             Next Lesson
-         </button>
+        <div className="flex justify-between mt-2">
+           <button
+               onClick={prevLesson}
+               className="px-3 py-1 bg-gray-700 hover:bg-gray-600 rounded text-sm disabled:opacity-50"
+               disabled={activeLessonId === 'L0'}
+           >
+               Previous
+           </button>
+           <button
+               onClick={nextLesson}
+               className={`px-3 py-1 rounded text-sm font-bold ${
+                   lessonStatus.passed
+                   ? 'bg-blue-600 hover:bg-blue-500 text-white'
+                   : 'bg-gray-700 text-gray-500 cursor-not-allowed'
+               }`}
+               disabled={!lessonStatus.passed}
+           >
+               Next Lesson
+           </button>
+        </div>
       </div>
     </div>
   );
