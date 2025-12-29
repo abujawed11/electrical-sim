@@ -16,12 +16,30 @@ export const Terminal = ({ componentId, terminal, isHovered, isEnergized, onMous
   let strokeWidth = 1;
   let radius = 4;
 
+  // Default subtle colors for phase identification (even when not energized)
+  if (terminal.kind === 'PHASE_R') {
+    fillColor = '#7F1D1D'; // Dark red
+    strokeColor = '#991B1B';
+  }
+  if (terminal.kind === 'PHASE_Y') {
+    fillColor = '#78350F'; // Dark yellow/amber
+    strokeColor = '#92400E';
+  }
+  if (terminal.kind === 'PHASE_B') {
+    fillColor = '#1E3A8A'; // Dark blue
+    strokeColor = '#1E40AF';
+  }
+
   if (isEnergized) {
       fillColor = '#F59E0B'; // Bright Orange/Gold for live
       // Or we can be kind-specific if passed kind, but generic "hot" is good for feedback
-      if (terminal.kind === 'NEUTRAL') fillColor = '#60A5FA';
-      if (terminal.kind === 'EARTH') fillColor = '#34D399';
-      if (terminal.kind === 'PHASE') fillColor = '#EF4444';
+      if (terminal.kind === 'NEUTRAL') fillColor = '#60A5FA'; // Blue
+      if (terminal.kind === 'EARTH') fillColor = '#34D399'; // Green
+      if (terminal.kind === 'PHASE') fillColor = '#EF4444'; // Red
+      // 3-Phase specific colors (bright when energized)
+      if (terminal.kind === 'PHASE_R') fillColor = '#EF4444'; // Bright Red
+      if (terminal.kind === 'PHASE_Y') fillColor = '#FBBF24'; // Bright Yellow
+      if (terminal.kind === 'PHASE_B') fillColor = '#3B82F6'; // Bright Blue
   }
 
   if (isHovered) {
@@ -105,6 +123,21 @@ export const Terminal = ({ componentId, terminal, isHovered, isEnergized, onMous
             bgColor = 'rgba(239, 68, 68, 0.9)'; // Red
             textColor = '#FFF';
             borderColor = 'rgba(255, 150, 150, 0.6)';
+            break;
+          case 'PHASE_R':
+            bgColor = 'rgba(239, 68, 68, 0.9)'; // Red
+            textColor = '#FFF';
+            borderColor = 'rgba(255, 150, 150, 0.6)';
+            break;
+          case 'PHASE_Y':
+            bgColor = 'rgba(251, 191, 36, 0.9)'; // Yellow
+            textColor = '#000';
+            borderColor = 'rgba(255, 220, 100, 0.6)';
+            break;
+          case 'PHASE_B':
+            bgColor = 'rgba(59, 130, 246, 0.9)'; // Blue
+            textColor = '#FFF';
+            borderColor = 'rgba(150, 200, 255, 0.6)';
             break;
           case 'NEUTRAL':
             bgColor = 'rgba(59, 130, 246, 0.9)'; // Blue
