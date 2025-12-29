@@ -10,6 +10,9 @@ export const Meter3P = ({ id, type, x, y, isSelected, properties, onSelect, onDr
   const setHoveredTerminal = useEditorStore((state) => state.setHoveredTerminal);
   const simulationState = useEditorStore((state) => state.simulationState);
 
+  // 3-Phase Energy Reading
+  const energy3PhaseKWh = useEditorStore((state) => state.energy3PhaseKWh);
+
   return (
     <Group id={id} x={x} y={y} draggable onClick={onSelect} onTap={onSelect} onDragEnd={onDragEnd}>
       {isSelected && (
@@ -26,7 +29,7 @@ export const Meter3P = ({ id, type, x, y, isSelected, properties, onSelect, onDr
       />
       <Rect width={70} height={30} fill="#064E3B" cornerRadius={2} offset={{ x: 35, y: 35 }} />
       <Text
-        text="0000.0 kWh"
+        text={`${energy3PhaseKWh.toFixed(3)} kWh`}
         fontSize={10}
         fontStyle="bold"
         fill="#10B981"

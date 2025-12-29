@@ -41,6 +41,7 @@ export const useEditorStore = create(
       simRunning: true,
       timeScale: 1, // 1x real time
       energyKWh: 0,
+      energy3PhaseKWh: 0, // 3-Phase energy meter
       lastTickMs: Date.now(),
 
       // Guided Mode State
@@ -73,7 +74,7 @@ export const useEditorStore = create(
       },
 
       resetEnergy: () => {
-          set({ energyKWh: 0 });
+          set({ energyKWh: 0, energy3PhaseKWh: 0 });
       },
 
       tickEnergy: (now) => {
@@ -90,11 +91,16 @@ export const useEditorStore = create(
           const dtSec = dtMs / 1000;
           const scaledDtSec = dtSec * timeScale;
           const dtHours = scaledDtSec / 3600;
-          
+
           const totalMainsPowerW = simulationState.deviceLoads?.['TOTAL_MAINS']?.P || 0;
 
           // Energy (kWh) = Power (kW) * Time (h)
           const deltaKWh = (totalMainsPowerW / 1000) * dtHours;
+
+          // 3-Phase Energy Calculation
+          // Calculate total power from all loads (3-phase system includes all phases)
+          const totalSystemPowerW = simulationState.totalSystemPowerW || 0;
+          const delta3PhaseKWh = (totalSystemPowerW / 1000) * dtHours;
 
           // Inverter Logic (Drain & Overload) & Auto Changeover Timers
           let componentsChanged = false;
@@ -212,6 +218,7 @@ export const useEditorStore = create(
           if (componentsChanged) {
               set(state => ({
                   energyKWh: state.energyKWh + deltaKWh,
+                  energy3PhaseKWh: state.energy3PhaseKWh + delta3PhaseKWh,
                   lastTickMs: now,
                   components: newComponents
               }));
@@ -221,6 +228,7 @@ export const useEditorStore = create(
           } else {
               set(state => ({
                   energyKWh: state.energyKWh + deltaKWh,
+                  energy3PhaseKWh: state.energy3PhaseKWh + delta3PhaseKWh,
                   lastTickMs: now
               }));
           }
@@ -414,11 +422,12 @@ export const useEditorStore = create(
               selectedId: null,
               selectedWireId: null,
               hoveredTerminal: null,
-              lessonStatus: mode === 'GUIDED' 
+              lessonStatus: mode === 'GUIDED'
                 ? { passed: false, checklist: get().lessonStatus.checklist.map(c => ({...c, completed: false})) }
                 : { passed: false, checklist: [] },
               messages: [],
-              energyKWh: 0 // Reset energy too
+              energyKWh: 0, // Reset energy too
+              energy3PhaseKWh: 0
           });
           get()._evaluate();
       },
@@ -566,6 +575,7 @@ export const useEditorStore = create(
           simRunning: state.simRunning,
           timeScale: state.timeScale,
           energyKWh: state.energyKWh,
+          energy3PhaseKWh: state.energy3PhaseKWh,
           lastTickMs: state.lastTickMs // Persist tick so we don't jump time on refresh? Actually better to reset to Now on hydrate.
           // We'll reset lastTickMs on hydrate or init to avoid massive jumps.
       }),
