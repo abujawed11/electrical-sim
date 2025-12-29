@@ -80,16 +80,18 @@ export const LessonPanel = () => {
   return (
     <div
       ref={panelRef}
-      className="absolute bg-gray-800 border border-gray-600 rounded-lg p-4 w-96 shadow-lg text-white"
+      className="fixed bg-gray-800 border border-gray-600 rounded-lg p-4 w-96 shadow-lg text-white flex flex-col"
       style={{
         left: `${position.x}px`,
         top: `${position.y}px`,
         cursor: isDragging ? 'grabbing' : 'default',
-        userSelect: isDragging ? 'none' : 'auto'
+        userSelect: isDragging ? 'none' : 'auto',
+        zIndex: 9999,
+        maxHeight: '85vh'
       }}
       onMouseDown={handleMouseDown}
     >
-      <div className="drag-handle flex justify-between items-center mb-2 cursor-grab active:cursor-grabbing -mx-4 -mt-4 px-4 py-3 bg-gray-700 rounded-t-lg border-b border-gray-600">
+      <div className="drag-handle flex justify-between items-center mb-2 cursor-grab active:cursor-grabbing -mx-4 -mt-4 px-4 py-3 bg-gray-700 rounded-t-lg border-b border-gray-600 flex-shrink-0">
          <div className="flex items-center gap-2">
            <span className="text-gray-400 pointer-events-none" title="Drag to move">⋮⋮</span>
            <h2 className="text-lg font-bold text-blue-400 pointer-events-none">{lesson.title}</h2>
@@ -108,7 +110,7 @@ export const LessonPanel = () => {
 
       {/* Lesson Menu Dropdown */}
       {showLessonMenu && (
-        <div ref={menuRef} className="absolute top-12 right-4 bg-gray-900 border border-gray-600 rounded-lg p-3 w-80 shadow-xl z-50 max-h-96 overflow-y-auto">
+        <div ref={menuRef} className="absolute top-12 right-4 bg-gray-900 border border-gray-600 rounded-lg p-3 w-80 shadow-xl z-[60] max-h-96 overflow-y-auto">
           <div className="flex justify-between items-center mb-3">
             <h3 className="text-sm font-bold text-gray-200">Jump to Lesson</h3>
             <button
@@ -169,10 +171,13 @@ export const LessonPanel = () => {
         </div>
       )}
 
-      <div className="mt-4">
+      {/* Scrollable content area */}
+      <div className="mt-4 flex-1 overflow-y-auto pr-2 scrollbar-thin scrollbar-thumb-gray-600 scrollbar-track-gray-800">
         <p className="text-sm text-gray-300 mb-4 whitespace-pre-line">{lesson.description}</p>
-      
-      <div className="bg-gray-900 rounded p-3 mb-4 space-y-2">
+      </div>
+
+      {/* Fixed objectives and buttons at bottom */}
+      <div className="bg-gray-900 rounded p-3 mb-4 space-y-2 flex-shrink-0">
          <h3 className="text-xs font-bold uppercase text-gray-500 mb-1">Objectives</h3>
          {lessonStatus.checklist.map((item) => (
              <div key={item.id} className="flex items-center text-sm">
@@ -188,7 +193,7 @@ export const LessonPanel = () => {
          ))}
       </div>
 
-        <div className="flex justify-between mt-2">
+        <div className="flex justify-between mt-2 flex-shrink-0">
            <button
                onClick={prevLesson}
                className="px-3 py-1 bg-gray-700 hover:bg-gray-600 rounded text-sm disabled:opacity-50"
@@ -208,7 +213,6 @@ export const LessonPanel = () => {
                Next Lesson
            </button>
         </div>
-      </div>
     </div>
   );
 };
