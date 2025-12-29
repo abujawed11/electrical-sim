@@ -311,4 +311,80 @@ export const PART_DEFINITIONS = {
       { id: 'E', kind: TERMINAL_KINDS.EARTH, relX: 40, relY: 30, label: 'E' },
     ],
   },
+  [COMPONENT_TYPES.METER_3P]: {
+    name: '3-Phase Energy Meter',
+    defaultProperties: {
+      label: '3-PH METER',
+    },
+    terminals: [
+      { id: 'IN_R', kind: TERMINAL_KINDS.PHASE_R, relX: -35, relY: 42, label: 'R-I' },
+      { id: 'IN_Y', kind: TERMINAL_KINDS.PHASE_Y, relX: -25, relY: 42, label: 'Y-I' },
+      { id: 'IN_B', kind: TERMINAL_KINDS.PHASE_B, relX: -15, relY: 42, label: 'B-I' },
+      { id: 'IN_N', kind: TERMINAL_KINDS.NEUTRAL, relX: -5, relY: 42, label: 'N-I' },
+      { id: 'OUT_N', kind: TERMINAL_KINDS.NEUTRAL, relX: 5, relY: 42, label: 'N-O' },
+      { id: 'OUT_B', kind: TERMINAL_KINDS.PHASE_B, relX: 15, relY: 42, label: 'B-O' },
+      { id: 'OUT_Y', kind: TERMINAL_KINDS.PHASE_Y, relX: 25, relY: 42, label: 'Y-O' },
+      { id: 'OUT_R', kind: TERMINAL_KINDS.PHASE_R, relX: 35, relY: 42, label: 'R-O' },
+    ],
+  },
+  [COMPONENT_TYPES.MCB_3P]: {
+    name: '3-Pole MCB (Main)',
+    defaultProperties: {
+      label: 'MCCB-1',
+      rating: '63A',
+      isOn: true,
+      isTripped: false,
+    },
+    terminals: [
+      { id: 'IN_R', kind: TERMINAL_KINDS.PHASE_R, relX: -25, relY: -46, label: 'R-I' },
+      { id: 'IN_Y', kind: TERMINAL_KINDS.PHASE_Y, relX: 0, relY: -46, label: 'Y-I' },
+      { id: 'IN_B', kind: TERMINAL_KINDS.PHASE_B, relX: 25, relY: -46, label: 'B-I' },
+      { id: 'OUT_R', kind: TERMINAL_KINDS.PHASE_R, relX: -25, relY: 46, label: 'R-O' },
+      { id: 'OUT_Y', kind: TERMINAL_KINDS.PHASE_Y, relX: 0, relY: 46, label: 'Y-O' },
+      { id: 'OUT_B', kind: TERMINAL_KINDS.PHASE_B, relX: 25, relY: 46, label: 'B-O' },
+    ],
+  },
+  [COMPONENT_TYPES.BUSBAR_R]: {
+    name: 'Busbar: Phase R',
+    defaultProperties: { label: 'R-BUS' },
+    terminals: Array.from({ length: 6 }).map((_, i) => ({
+      id: `T${i + 1}`,
+      kind: TERMINAL_KINDS.PHASE_R,
+      relX: 0,
+      relY: -60 + i * 24,
+      label: `R${i + 1}`,
+    })),
+  },
+  [COMPONENT_TYPES.BUSBAR_Y]: {
+    name: 'Busbar: Phase Y',
+    defaultProperties: { label: 'Y-BUS' },
+    terminals: Array.from({ length: 6 }).map((_, i) => ({
+      id: `T${i + 1}`,
+      kind: TERMINAL_KINDS.PHASE_Y,
+      relX: 0,
+      relY: -60 + i * 24,
+      label: `Y${i + 1}`,
+    })),
+  },
+  [COMPONENT_TYPES.BUSBAR_B]: {
+    name: 'Busbar: Phase B',
+    defaultProperties: { label: 'B-BUS' },
+    terminals: Array.from({ length: 6 }).map((_, i) => ({
+      id: `T${i + 1}`,
+      kind: TERMINAL_KINDS.PHASE_B,
+      relX: 0,
+      relY: -60 + i * 24,
+      label: `B${i + 1}`,
+    })),
+  },
+  [COMPONENT_TYPES.PHASE_INDICATOR]: {
+    name: '3-Phase Indicator',
+    defaultProperties: { label: 'PHASE IND' },
+    terminals: [
+      { id: 'R', kind: TERMINAL_KINDS.PHASE_R, relX: -30, relY: 20, label: 'R' },
+      { id: 'Y', kind: TERMINAL_KINDS.PHASE_Y, relX: -10, relY: 20, label: 'Y' },
+      { id: 'B', kind: TERMINAL_KINDS.PHASE_B, relX: 10, relY: 20, label: 'B' },
+      { id: 'N', kind: TERMINAL_KINDS.NEUTRAL, relX: 30, relY: 20, label: 'N' },
+    ],
+  },
 };

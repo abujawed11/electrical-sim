@@ -121,6 +121,25 @@ export const evaluateNetwork = (components, wires) => {
             addEdge(neutralGraph, `${comp.id}:AC_IN_N`, `${comp.id}:AC_OUT_N`);
         }
     }
+    else if (comp.type === COMPONENT_TYPES.MCB_3P) {
+      if (comp.properties.isOn && !comp.properties.isTripped) {
+          addEdge(conductorGraph, `${comp.id}:IN_R`, `${comp.id}:OUT_R`);
+          addEdge(conductorGraph, `${comp.id}:IN_Y`, `${comp.id}:OUT_Y`);
+          addEdge(conductorGraph, `${comp.id}:IN_B`, `${comp.id}:OUT_B`);
+      }
+    }
+    else if (comp.type === COMPONENT_TYPES.METER_3P) {
+      addEdge(conductorGraph, `${comp.id}:IN_R`, `${comp.id}:OUT_R`);
+      addEdge(conductorGraph, `${comp.id}:IN_Y`, `${comp.id}:OUT_Y`);
+      addEdge(conductorGraph, `${comp.id}:IN_B`, `${comp.id}:OUT_B`);
+      addEdge(neutralGraph, `${comp.id}:IN_N`, `${comp.id}:OUT_N`);
+    }
+    else if ([COMPONENT_TYPES.BUSBAR_R, COMPONENT_TYPES.BUSBAR_Y, COMPONENT_TYPES.BUSBAR_B].includes(comp.type)) {
+      const terms = registryItem.terminals;
+      for (let i = 0; i < terms.length - 1; i++) {
+          addEdge(conductorGraph, `${comp.id}:${terms[i].id}`, `${comp.id}:${terms[i+1].id}`);
+      }
+    }
     // 3-Phase Devices usually don't have internal phase-to-phase shorts unless faulted.
     // Supply and Transformers are sources, handled below.
   });

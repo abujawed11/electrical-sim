@@ -26,6 +26,10 @@ import { Changeover } from './Changeover';
 import { Supply3P } from './Supply3P';
 import { Transformer3P } from './Transformer3P';
 import { Load3P } from './Load3P';
+import { Meter3P } from './Meter3P';
+import { MCB3P } from './MCB3P';
+import { Busbar3P } from './Busbar3P';
+import { PhaseIndicator } from './PhaseIndicator';
 
 const COMPONENTS = {
   [COMPONENT_TYPES.SUPPLY]: Supply,
@@ -53,6 +57,12 @@ const COMPONENTS = {
   [COMPONENT_TYPES.SUPPLY_3P]: Supply3P,
   [COMPONENT_TYPES.TRANSFORMER_3P]: Transformer3P,
   [COMPONENT_TYPES.LOAD_3P_BALANCED]: Load3P,
+  [COMPONENT_TYPES.METER_3P]: Meter3P,
+  [COMPONENT_TYPES.MCB_3P]: MCB3P,
+  [COMPONENT_TYPES.BUSBAR_R]: Busbar3P,
+  [COMPONENT_TYPES.BUSBAR_Y]: Busbar3P,
+  [COMPONENT_TYPES.BUSBAR_B]: Busbar3P,
+  [COMPONENT_TYPES.PHASE_INDICATOR]: PhaseIndicator,
 };
 
 

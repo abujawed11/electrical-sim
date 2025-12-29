@@ -72,7 +72,7 @@ export const PropertiesPanel = () => {
   };
 
   const isLoad = [COMPONENT_TYPES.LAMP, COMPONENT_TYPES.GENERIC_LOAD, COMPONENT_TYPES.FAN, COMPONENT_TYPES.AC, COMPONENT_TYPES.HEATER, COMPONENT_TYPES.GEYSER].includes(selectedComponent.type);
-  const isBreaker = selectedComponent.type === COMPONENT_TYPES.MCB || selectedComponent.type === COMPONENT_TYPES.RCBO;
+  const isBreaker = selectedComponent.type === COMPONENT_TYPES.MCB || selectedComponent.type === COMPONENT_TYPES.RCBO || selectedComponent.type === COMPONENT_TYPES.MCB_3P;
   const isRCCB = selectedComponent.type === COMPONENT_TYPES.RCCB;
 
   return (
@@ -198,7 +198,7 @@ export const PropertiesPanel = () => {
         )}
 
         {/* Specific Properties based on Type */}
-        {(isBreaker || isRCCB || selectedComponent.type === COMPONENT_TYPES.SWITCH) && (
+        {(isBreaker || isRCCB || selectedComponent.type === COMPONENT_TYPES.SWITCH || selectedComponent.type === COMPONENT_TYPES.MCB_3P) && (
            <div className="flex items-center justify-between p-2 bg-gray-700 rounded">
               <span className="text-gray-200 text-sm">Switch State</span>
               <button

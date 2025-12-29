@@ -53,8 +53,24 @@ export const evaluateLoads = (components, wires, simulationState, mainsVoltage) 
       else if (c.type === COMPONENT_TYPES.CHANGEOVER) {
           if (c.properties.position === 'MAINS') {
              addInternal(phaseGraph, c.id, 'A_L', 'OUT_L');
-          } else if (c.properties.position === 'INVERTER') {
+          } else {
              addInternal(phaseGraph, c.id, 'B_L', 'OUT_L');
+          }
+      }
+      else if (c.type === COMPONENT_TYPES.MCB_3P && isClosed) {
+          addInternal(phaseGraph, c.id, 'OUT_R', 'IN_R');
+          addInternal(phaseGraph, c.id, 'OUT_Y', 'IN_Y');
+          addInternal(phaseGraph, c.id, 'OUT_B', 'IN_B');
+      }
+      else if (c.type === COMPONENT_TYPES.METER_3P) {
+          addInternal(phaseGraph, c.id, 'OUT_R', 'IN_R');
+          addInternal(phaseGraph, c.id, 'OUT_Y', 'IN_Y');
+          addInternal(phaseGraph, c.id, 'OUT_B', 'IN_B');
+      }
+      else if ([COMPONENT_TYPES.BUSBAR_R, COMPONENT_TYPES.BUSBAR_Y, COMPONENT_TYPES.BUSBAR_B].includes(c.type)) {
+          const terms = PART_REGISTRY[c.type].terminals;
+          for (let i = 0; i < terms.length - 1; i++) {
+              addInternal(phaseGraph, c.id, terms[i].id, terms[i+1].id);
           }
       }
   });
