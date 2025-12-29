@@ -46,7 +46,7 @@ export const Meter3P = ({ id, type, x, y, isSelected, properties, onSelect, onDr
         align="center"
       />
       <Line points={[-40, 35, 40, 35]} stroke="#374151" strokeWidth={1} />
-      {registryItem.terminals.map((t) => {
+      {registryItem.terminals.map((t, index) => {
         const terminalIdStr = `${id}:${t.id}`;
         let isEnergized = false;
         if (t.kind === 'PHASE_R') isEnergized = simulationState.phaseRSet.has(terminalIdStr);
@@ -54,11 +54,19 @@ export const Meter3P = ({ id, type, x, y, isSelected, properties, onSelect, onDr
         if (t.kind === 'PHASE_B') isEnergized = simulationState.phaseBSet.has(terminalIdStr);
         if (t.kind === 'NEUTRAL') isEnergized = simulationState.neutralSet.has(terminalIdStr);
 
+        // Alternate label positions: up, down, up, down, up, down, up, down
+        const isEvenIndex = index % 2 === 0;
+        const customTerminal = {
+          ...t,
+          // Override relY for label positioning (make terminals think they're at different Y)
+          labelOffsetY: isEvenIndex ? -8 : 8 // Custom offset for alternating labels
+        };
+
         return (
           <Terminal
             key={t.id}
             componentId={id}
-            terminal={t}
+            terminal={customTerminal}
             isHovered={hoveredTerminal?.compId === id && hoveredTerminal?.terminalId === t.id}
             isEnergized={isEnergized}
             onMouseEnter={() => setHoveredTerminal({ compId: id, terminalId: t.id })}

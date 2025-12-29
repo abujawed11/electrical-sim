@@ -73,7 +73,11 @@ export const Terminal = ({ componentId, terminal, isHovered, isEnergized, onMous
   let lx = 0;
   let ly = 0;
 
-  if (terminal.relX === 0 && terminal.relY === 0) {
+  // Check for custom label offset (for alternating labels in tight spaces)
+  if (terminal.labelOffsetY !== undefined) {
+      ly = dist + terminal.labelOffsetY;
+      lx = 0;
+  } else if (terminal.relX === 0 && terminal.relY === 0) {
       ly = -dist; // Default above
   } else {
       const absX = Math.abs(terminal.relX);
