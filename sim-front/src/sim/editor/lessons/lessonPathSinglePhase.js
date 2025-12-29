@@ -206,5 +206,38 @@ export const LESSON_PATH = [
             c.properties.isTripped
         );
     }
+  },
+  {
+    id: 'L10',
+    title: 'Inverter Backup Wiring',
+    description: 'Install an Inverter and Changeover Switch. Wire Mains to Inverter Input and Changeover "Mains" (A). Wire Inverter Output to Changeover "Inverter" (B). Connect Changeover Output to a Load. Verify backup power by turning Mains OFF.',
+    allowedParts: Object.values(COMPONENT_TYPES),
+    checklist: [
+      { id: 'parts', label: 'Place Inverter & Changeover Switch' },
+      { id: 'wire_inv_in', label: 'Wire Mains → Inverter AC_IN' },
+      { id: 'wire_chg_a', label: 'Wire Mains → Changeover A' },
+      { id: 'wire_chg_b', label: 'Wire Inverter AC_OUT → Changeover B' },
+      { id: 'wire_load', label: 'Wire Changeover OUT → Load' },
+      { id: 'test', label: 'Turn MAINS OFF, Switch to INVERTER, Verify Load ON' },
+    ],
+    validate: () => true,
+    customCheck: (simState, components) => {
+        // Check if Mains Supply is OFF
+        const supply = components.find(c => c.type === COMPONENT_TYPES.SUPPLY);
+        if (!supply || supply.properties.enabled) return false;
+
+        // Check if Inverter is ON
+        const inverter = components.find(c => c.type === COMPONENT_TYPES.INVERTER);
+        if (!inverter || !inverter.properties.enabled) return false;
+
+        // Check if Changeover is on INVERTER
+        const changeover = components.find(c => c.type === COMPONENT_TYPES.CHANGEOVER);
+        if (!changeover || changeover.properties.position !== 'INVERTER') return false;
+
+        // Check if any Load is Powered
+        const anyLoadPowered = Object.values(simState.loadData).some(l => l.isPowered);
+        
+        return anyLoadPowered;
+    }
   }
 ];

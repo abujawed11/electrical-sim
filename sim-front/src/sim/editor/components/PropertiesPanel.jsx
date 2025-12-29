@@ -273,6 +273,87 @@ export const PropertiesPanel = () => {
             </div>
         )}
 
+        {selectedComponent.type === COMPONENT_TYPES.INVERTER && (
+            <div className="space-y-3">
+               <div className="flex items-center justify-between p-2 bg-gray-700 rounded">
+                  <span className="text-gray-200 text-sm">Inverter Power</span>
+                  <button
+                    onClick={() => handlePropChange('enabled', !selectedComponent.properties.enabled)}
+                    className={`px-3 py-1 rounded text-xs font-bold ${
+                        selectedComponent.properties.enabled 
+                        ? 'bg-green-600 text-white' 
+                        : 'bg-gray-600 text-gray-300'
+                    }`}
+                  >
+                    {selectedComponent.properties.enabled ? 'ON' : 'OFF'}
+                  </button>
+               </div>
+               
+               <div className="space-y-1">
+                   <label className="text-xs text-gray-400 block">Capacity (VA)</label>
+                   <input type="number" value={selectedComponent.properties.capacityVA} onChange={(e) => handlePropChange('capacityVA', parseFloat(e.target.value))} className="w-full bg-gray-900 border border-gray-600 rounded px-2 py-1 text-white"/>
+               </div>
+               
+               <div className="space-y-1">
+                   <label className="text-xs text-gray-400 block">Battery (Wh)</label>
+                   <input type="number" value={selectedComponent.properties.batteryWh} onChange={(e) => handlePropChange('batteryWh', parseFloat(e.target.value))} className="w-full bg-gray-900 border border-gray-600 rounded px-2 py-1 text-white"/>
+               </div>
+
+               <div className="p-2 bg-gray-900 rounded border border-gray-700">
+                   <div className="flex justify-between items-center mb-1">
+                       <span className="text-gray-400 text-xs">State of Charge</span>
+                       <button onClick={() => handlePropChange('socWh', selectedComponent.properties.batteryWh)} className="text-[10px] bg-gray-700 px-1 rounded text-blue-300 hover:bg-gray-600">RESET</button>
+                   </div>
+                   <div className="w-full bg-gray-800 h-2 rounded overflow-hidden">
+                       <div className="h-full bg-green-500" style={{ width: `${Math.min(100, (selectedComponent.properties.socWh / selectedComponent.properties.batteryWh)*100)}%` }} />
+                   </div>
+                   <div className="text-right text-xs text-gray-400 mt-1">{Math.round(selectedComponent.properties.socWh)} Wh</div>
+               </div>
+
+               <div className="p-2 bg-gray-900 rounded border border-gray-700">
+                   <div className="text-gray-400 text-xs">Inverter Load</div>
+                   <div className="text-yellow-400 font-mono text-xl">
+                       {(deviceLoads?.[selectedComponent.id]?.currentA || 0).toFixed(2)} A
+                   </div>
+                   <div className="grid grid-cols-2 gap-2 text-xs text-gray-400 mt-1">
+                        <div>{(deviceLoads?.[selectedComponent.id]?.P || 0).toFixed(0)} W</div>
+                        <div>{(deviceLoads?.[selectedComponent.id]?.S || 0).toFixed(0)} VA</div>
+                   </div>
+                   {selectedComponent.properties.isOverloaded && (
+                       <div className="mt-1 text-red-500 font-bold text-xs animate-pulse">OVERLOADED!</div>
+                   )}
+               </div>
+            </div>
+        )}
+
+        {selectedComponent.type === COMPONENT_TYPES.CHANGEOVER && (
+            <div className="space-y-2">
+                <label className="text-xs text-gray-400 block">Position</label>
+                <div className="flex space-x-2">
+                    <button
+                        onClick={() => handlePropChange('position', 'MAINS')}
+                        className={`flex-1 py-2 rounded text-xs font-bold ${
+                            selectedComponent.properties.position === 'MAINS'
+                            ? 'bg-green-600 text-white'
+                            : 'bg-gray-700 text-gray-400'
+                        }`}
+                    >
+                        MAINS
+                    </button>
+                    <button
+                        onClick={() => handlePropChange('position', 'INVERTER')}
+                        className={`flex-1 py-2 rounded text-xs font-bold ${
+                            selectedComponent.properties.position === 'INVERTER'
+                            ? 'bg-yellow-600 text-white'
+                            : 'bg-gray-700 text-gray-400'
+                        }`}
+                    >
+                        INVERTER
+                    </button>
+                </div>
+            </div>
+        )}
+
         {/* Rating Field */}
         {!isLoad && selectedComponent.properties.rating !== undefined && (
             <div className="space-y-1">

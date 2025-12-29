@@ -74,7 +74,7 @@ export const useEditorStore = create(
       },
 
       tickEnergy: (now) => {
-          const { simRunning, lastTickMs, timeScale, simulationState } = get();
+          const { simRunning, lastTickMs, timeScale, simulationState, components } = get();
           if (!simRunning) {
               // Just update lastTick to now so we don't accumulate paused time later
               set({ lastTickMs: now });
@@ -86,17 +86,67 @@ export const useEditorStore = create(
 
           const dtSec = dtMs / 1000;
           const scaledDtSec = dtSec * timeScale;
-          const totalPowerW = simulationState.totalSystemPowerW || 0;
+          const dtHours = scaledDtSec / 3600;
+          
+          const totalMainsPowerW = simulationState.deviceLoads?.['TOTAL_MAINS']?.P || 0;
 
           // Energy (kWh) = Power (kW) * Time (h)
-          // Power (kW) = W / 1000
-          // Time (h) = sec / 3600
-          const deltaKWh = (totalPowerW / 1000) * (scaledDtSec / 3600);
+          const deltaKWh = (totalMainsPowerW / 1000) * dtHours;
 
-          set(state => ({
-              energyKWh: state.energyKWh + deltaKWh,
-              lastTickMs: now
-          }));
+          // Inverter Logic (Drain & Overload)
+          let componentsChanged = false;
+          let needReeval = false;
+
+          const newComponents = components.map(c => {
+             if (c.type === 'INVERTER' && c.properties.enabled) {
+                 const loadStats = simulationState.deviceLoads?.[c.id];
+                 // If the inverter is not powering anything, loadStats might be undefined
+                 const loadP = loadStats?.P || 0;
+                 const loadS = loadStats?.S || 0;
+                 
+                 let newSoc = c.properties.socWh;
+                 let newOverloaded = false;
+
+                 // Check Overload
+                 if (loadS > c.properties.capacityVA) {
+                     newOverloaded = true;
+                 }
+
+                 // Drain Battery
+                 if (c.properties.socWh > 0 && loadP > 0) {
+                     newSoc = Math.max(0, c.properties.socWh - (loadP * dtHours));
+                 }
+
+                 const socChanged = Math.abs(newSoc - c.properties.socWh) > 0.001; // Epsilon check
+                 const overloadChanged = newOverloaded !== c.properties.isOverloaded;
+
+                 if (socChanged || overloadChanged) {
+                     componentsChanged = true;
+                     // If battery died (went to 0 from >0), we need to re-evaluate network
+                     if (c.properties.socWh > 0 && newSoc === 0) {
+                         needReeval = true;
+                     }
+                     return { ...c, properties: { ...c.properties, socWh: newSoc, isOverloaded: newOverloaded } };
+                 }
+             }
+             return c;
+          });
+
+          if (componentsChanged) {
+              set(state => ({
+                  energyKWh: state.energyKWh + deltaKWh,
+                  lastTickMs: now,
+                  components: newComponents
+              }));
+              if (needReeval) {
+                  get()._evaluate();
+              }
+          } else {
+              set(state => ({
+                  energyKWh: state.energyKWh + deltaKWh,
+                  lastTickMs: now
+              }));
+          }
       },
 
       // --- Helper to trigger evaluation ---

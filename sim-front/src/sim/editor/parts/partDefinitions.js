@@ -215,4 +215,37 @@ export const PART_DEFINITIONS = {
       { id: 'T4', kind: TERMINAL_KINDS.GENERIC, relX: -20, relY: 0, label: '4' },
     ],
   },
+  [COMPONENT_TYPES.INVERTER]: {
+    name: 'Inverter (UPS)',
+    defaultProperties: {
+      label: 'INV-1',
+      capacityVA: 900,
+      batteryWh: 1200,
+      socWh: 1200,
+      enabled: true,
+      isOverloaded: false,
+    },
+    terminals: [
+      { id: 'AC_IN_L', kind: TERMINAL_KINDS.PHASE, relX: -25, relY: -40, label: 'IN-L' },
+      { id: 'AC_IN_N', kind: TERMINAL_KINDS.NEUTRAL, relX: -5, relY: -40, label: 'IN-N' },
+      { id: 'AC_OUT_L', kind: TERMINAL_KINDS.PHASE, relX: 25, relY: 40, label: 'OUT-L' },
+      { id: 'AC_OUT_N', kind: TERMINAL_KINDS.NEUTRAL, relX: 5, relY: 40, label: 'OUT-N' },
+      { id: 'E', kind: TERMINAL_KINDS.EARTH, relX: 0, relY: 0, label: 'E' },
+    ],
+  },
+  [COMPONENT_TYPES.CHANGEOVER]: {
+    name: 'Changeover Switch',
+    defaultProperties: {
+      label: 'CHG-1',
+      position: 'MAINS', // 'MAINS' or 'INVERTER'
+    },
+    terminals: [
+      { id: 'A_L', kind: TERMINAL_KINDS.PHASE, relX: -20, relY: -30, label: 'A-L' }, // Mains
+      { id: 'A_N', kind: TERMINAL_KINDS.NEUTRAL, relX: -5, relY: -30, label: 'A-N' },
+      { id: 'B_L', kind: TERMINAL_KINDS.PHASE, relX: 20, relY: -30, label: 'B-L' }, // Inverter
+      { id: 'B_N', kind: TERMINAL_KINDS.NEUTRAL, relX: 35, relY: -30, label: 'B-N' },
+      { id: 'OUT_L', kind: TERMINAL_KINDS.PHASE, relX: 0, relY: 30, label: 'L' },
+      { id: 'OUT_N', kind: TERMINAL_KINDS.NEUTRAL, relX: 15, relY: 30, label: 'N' },
+    ],
+  },
 };

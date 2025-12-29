@@ -13,7 +13,8 @@ import { PART_DEFINITIONS as PART_REGISTRY } from '../parts/partDefinitions';
 export const evaluateLoads = (components, wires, simulationState, mainsVoltage) => {
   const loadData = {}; 
   const deviceLoads = { 
-      'TOTAL_MAINS': { I_real: 0, I_imag: 0, currentA: 0, P: 0, S: 0, Q: 0 } 
+      'TOTAL_MAINS': { I_real: 0, I_imag: 0, currentA: 0, P: 0, S: 0, Q: 0 },
+      'TOTAL_INVERTER': { I_real: 0, I_imag: 0, currentA: 0, P: 0, S: 0, Q: 0 }
   }; 
   let totalSystemPowerW = 0;
 
@@ -44,6 +45,13 @@ export const evaluateLoads = (components, wires, simulationState, mainsVoltage) 
           const terms = PART_REGISTRY[c.type].terminals;
           for (let i = 0; i < terms.length - 1; i++) {
               addInternal(phaseGraph, c.id, terms[i].id, terms[i+1].id);
+          }
+      }
+      else if (c.type === COMPONENT_TYPES.CHANGEOVER) {
+          if (c.properties.position === 'MAINS') {
+             addInternal(phaseGraph, c.id, 'A_L', 'OUT_L');
+          } else {
+             addInternal(phaseGraph, c.id, 'B_L', 'OUT_L');
           }
       }
   });
@@ -107,7 +115,23 @@ export const evaluateLoads = (components, wires, simulationState, mainsVoltage) 
                   deviceLoads[id].S = Math.sqrt(deviceLoads[id].P**2 + deviceLoads[id].Q**2);
               };
 
-              addToDevice('TOTAL_MAINS');
+              // Identify Source
+              const sources = findUpstreamSources(termL, phaseGraph, components);
+              let poweredByInverter = false;
+              
+              sources.forEach(srcId => {
+                  const srcComp = components.find(c => c.id === srcId);
+                  if (srcComp && srcComp.type === COMPONENT_TYPES.INVERTER) {
+                      addToDevice(srcId); // Add to specific inverter load
+                      poweredByInverter = true;
+                  }
+              });
+
+              if (poweredByInverter) {
+                  addToDevice('TOTAL_INVERTER');
+              } else {
+                  addToDevice('TOTAL_MAINS');
+              }
               
               const breakers = findUpstreamBreakers(termL, phaseGraph, components);
               breakers.forEach(bId => addToDevice(bId));
@@ -145,4 +169,35 @@ function findUpstreamBreakers(startNode, graph, components) {
         }
     }
     return Array.from(breakers);
+}
+
+function findUpstreamSources(startNode, graph, components) {
+    const sources = new Set();
+    const queue = [startNode];
+    const visited = new Set();
+    visited.add(startNode);
+
+    while (queue.length > 0) {
+        const current = queue.shift();
+        const [compId, termId] = current.split(':');
+        const comp = components.find(c => c.id === compId);
+
+        if (comp) {
+            if (comp.type === COMPONENT_TYPES.SUPPLY) {
+                sources.add(comp.id);
+            }
+            if (comp.type === COMPONENT_TYPES.INVERTER && (termId === 'AC_OUT_L' || termId === 'AC_OUT_N')) {
+                sources.add(comp.id);
+            }
+        }
+
+        const neighbors = graph.get(current) || [];
+        for (const next of neighbors) {
+            if (!visited.has(next)) {
+                visited.add(next);
+                queue.push(next);
+            }
+        }
+    }
+    return Array.from(sources);
 }

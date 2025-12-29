@@ -100,10 +100,20 @@ export const evaluateNetwork = (components, wires) => {
           addEdge(earthGraph, u, v);
       }
     }
+    else if (comp.type === COMPONENT_TYPES.CHANGEOVER) {
+      if (comp.properties.position === 'MAINS') {
+          addEdge(phaseGraph, `${comp.id}:A_L`, `${comp.id}:OUT_L`);
+          addEdge(neutralGraph, `${comp.id}:A_N`, `${comp.id}:OUT_N`);
+      } else {
+          addEdge(phaseGraph, `${comp.id}:B_L`, `${comp.id}:OUT_L`);
+          addEdge(neutralGraph, `${comp.id}:B_N`, `${comp.id}:OUT_N`);
+      }
+    }
   });
 
   // 2. Identify Sources
   const supplies = components.filter(c => c.type === COMPONENT_TYPES.SUPPLY && c.properties.enabled);
+  const inverters = components.filter(c => c.type === COMPONENT_TYPES.INVERTER && c.properties.enabled && c.properties.socWh > 0 && !c.properties.isOverloaded);
   
   const phaseSources = [];
   const neutralSources = [];
@@ -113,6 +123,12 @@ export const evaluateNetwork = (components, wires) => {
     phaseSources.push(`${supply.id}:L`);
     neutralSources.push(`${supply.id}:N`);
     earthSources.push(`${supply.id}:E`);
+  });
+
+  inverters.forEach(inv => {
+    phaseSources.push(`${inv.id}:AC_OUT_L`);
+    neutralSources.push(`${inv.id}:AC_OUT_N`);
+    // Inverter E terminal is passive, not a source of Earth potential usually (it needs to be earthed)
   });
 
   // 3. BFS Propagation (Energization)
