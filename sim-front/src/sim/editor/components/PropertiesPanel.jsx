@@ -323,6 +323,17 @@ export const PropertiesPanel = () => {
                        <div className="mt-1 text-red-500 font-bold text-xs animate-pulse">OVERLOADED!</div>
                    )}
                </div>
+
+               <div className="space-y-1">
+                   <label className="text-xs text-gray-400 block">Charging Rate (W)</label>
+                   <input type="number" value={selectedComponent.properties.chargingPowerW || 200} onChange={(e) => handlePropChange('chargingPowerW', parseFloat(e.target.value))} className="w-full bg-gray-900 border border-gray-600 rounded px-2 py-1 text-white"/>
+               </div>
+
+               <div className="space-y-1">
+                   <label className="text-xs text-gray-400 block">Overload Shutdown Delay (seconds)</label>
+                   <input type="number" value={(selectedComponent.properties.overloadShutdownDelayMs || 30000) / 1000} onChange={(e) => handlePropChange('overloadShutdownDelayMs', parseFloat(e.target.value) * 1000)} className="w-full bg-gray-900 border border-gray-600 rounded px-2 py-1 text-white"/>
+                   <p className="text-[10px] text-gray-500 italic">Time before inverter shuts down when overloaded</p>
+               </div>
             </div>
         )}
 

@@ -228,6 +228,9 @@ export const PART_DEFINITIONS = {
       isCharging: false,
       isBypassMode: false, // Internal relay state: true = Mains->Out, false = Battery->Out
       status: 'Inverter', // 'Mains (Bypass)' or 'Inverter'
+      overloadShutdownDelayMs: 30000, // 30 seconds delay before shutdown
+      overloadStartTime: 0, // When overload was first detected
+      isAlarming: false, // Buzzer/alarm state
     },
     terminals: [
       { id: 'AC_IN_L', kind: TERMINAL_KINDS.PHASE, relX: -25, relY: -40, label: 'IN-L' },

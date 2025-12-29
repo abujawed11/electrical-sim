@@ -108,35 +108,81 @@ export const useEditorStore = create(
                  let newSoc = c.properties.socWh;
                  let newOverloaded = false;
                  let isCharging = false;
+                 let newEnabled = c.properties.enabled;
+                 let overloadStartTime = c.properties.overloadStartTime || 0;
+                 let isAlarming = c.properties.isAlarming || false;
 
                  // Check overload
                  if (loadS > c.properties.capacityVA) newOverloaded = true;
 
-                 // Battery charging/discharging logic
+                 // Overload Protection Logic
+                 if (newOverloaded && c.properties.enabled) {
+                     // Start overload timer if not already started
+                     if (!c.properties.isOverloaded) {
+                         overloadStartTime = now;
+                         isAlarming = true;
+                         // Add warning message
+                         get().addMessage(`⚠️ ${c.properties.label}: OVERLOAD! Load: ${Math.round(loadS)}VA / Capacity: ${c.properties.capacityVA}VA`, 'warning');
+                     }
+
+                     // Check if shutdown delay has elapsed
+                     const overloadDuration = now - overloadStartTime;
+                     const shutdownDelay = c.properties.overloadShutdownDelayMs || 30000;
+
+                     if (overloadDuration >= shutdownDelay) {
+                         // Shutdown inverter
+                         newEnabled = false;
+                         isAlarming = false;
+                         needReeval = true;
+                         get().addMessage(`🔴 ${c.properties.label}: SHUTDOWN due to prolonged overload!`, 'error');
+                     }
+                 } else if (!newOverloaded && c.properties.isOverloaded) {
+                     // Overload cleared
+                     overloadStartTime = 0;
+                     isAlarming = false;
+                 }
+
+                 // Battery charging/discharging logic (only if enabled)
                  const maxBattery = c.properties.batteryWh || 1200;
                  const chargingPowerW = c.properties.chargingPowerW || 200; // Default 200W charging rate
 
-                 if (c.properties.isBypassMode) {
-                     // Bypass mode (mains available) - Charge battery
-                     if (newSoc < maxBattery) {
-                         newSoc = Math.min(maxBattery, newSoc + (chargingPowerW * dtHours));
-                         isCharging = true;
-                     }
-                 } else {
-                     // Inverter mode (no mains) - Discharge battery
-                     if (c.properties.socWh > 0 && loadP > 0) {
-                         newSoc = Math.max(0, c.properties.socWh - (loadP * dtHours));
+                 if (newEnabled) {
+                     if (c.properties.isBypassMode) {
+                         // Bypass mode (mains available) - Charge battery
+                         if (newSoc < maxBattery) {
+                             newSoc = Math.min(maxBattery, newSoc + (chargingPowerW * dtHours));
+                             isCharging = true;
+                         }
+                     } else {
+                         // Inverter mode (no mains) - Discharge battery
+                         if (c.properties.socWh > 0 && loadP > 0) {
+                             newSoc = Math.max(0, c.properties.socWh - (loadP * dtHours));
+                         }
                      }
                  }
 
                  const socChanged = Math.abs(newSoc - c.properties.socWh) > 0.001;
                  const overloadChanged = newOverloaded !== c.properties.isOverloaded;
                  const chargingChanged = (c.properties.isCharging || false) !== isCharging;
+                 const enabledChanged = newEnabled !== c.properties.enabled;
+                 const alarmChanged = isAlarming !== (c.properties.isAlarming || false);
 
-                 if (socChanged || overloadChanged || chargingChanged) {
+                 if (socChanged || overloadChanged || chargingChanged || enabledChanged || alarmChanged) {
                      componentsChanged = true;
                      if (c.properties.socWh > 0 && newSoc === 0) needReeval = true;
-                     return { ...c, properties: { ...c.properties, socWh: newSoc, isOverloaded: newOverloaded, isCharging } };
+                     if (enabledChanged) needReeval = true;
+                     return {
+                         ...c,
+                         properties: {
+                             ...c.properties,
+                             socWh: newSoc,
+                             isOverloaded: newOverloaded,
+                             isCharging,
+                             enabled: newEnabled,
+                             overloadStartTime,
+                             isAlarming
+                         }
+                     };
                  }
              }
              

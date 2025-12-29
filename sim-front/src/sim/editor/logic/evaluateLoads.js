@@ -191,9 +191,10 @@ function findUpstreamSources(startNode, graph, components) {
                 comp.properties.enabled &&
                 !comp.properties.isBypassMode &&
                 comp.properties.socWh > 0 &&
-                !comp.properties.isOverloaded &&
                 termId === 'AC_OUT_L'
             ) {
+                // Inverter continues to supply power during overload alarm period
+                // It only stops when enabled=false (after shutdown)
                 inverterIds.add(comp.id);
             }
         }

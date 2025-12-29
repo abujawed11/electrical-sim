@@ -10,8 +10,30 @@ export const Inverter = ({ id, type, x, y, isSelected, properties, onSelect, onD
   const setHoveredTerminal = useEditorStore((state) => state.setHoveredTerminal);
   const simulationState = useEditorStore((state) => state.simulationState);
 
-  const { label, capacityVA, batteryWh, socWh, enabled, isOverloaded, isCharging, status } = properties;
+  const { label, capacityVA, batteryWh, socWh, enabled, isOverloaded, isCharging, status, isAlarming, overloadStartTime, overloadShutdownDelayMs } = properties;
   const socPercent = Math.max(0, Math.min(100, (socWh / batteryWh) * 100));
+
+  // Blinking effect for alarm (using timestamp for animation)
+  const [blinkState, setBlinkState] = React.useState(false);
+  const [remainingTime, setRemainingTime] = React.useState(0);
+
+  React.useEffect(() => {
+    if (isAlarming) {
+      const interval = setInterval(() => setBlinkState(prev => !prev), 500);
+      return () => clearInterval(interval);
+    }
+  }, [isAlarming]);
+
+  React.useEffect(() => {
+    if (isAlarming && overloadStartTime) {
+      const interval = setInterval(() => {
+        const elapsed = Date.now() - overloadStartTime;
+        const remaining = Math.max(0, (overloadShutdownDelayMs || 30000) - elapsed);
+        setRemainingTime(Math.ceil(remaining / 1000));
+      }, 100);
+      return () => clearInterval(interval);
+    }
+  }, [isAlarming, overloadStartTime, overloadShutdownDelayMs]);
 
   return (
     <Group
@@ -39,7 +61,7 @@ export const Inverter = ({ id, type, x, y, isSelected, properties, onSelect, onD
         width={84}
         height={94}
         fill="#1F2937" // Darker gray
-        stroke={isOverloaded ? "#EF4444" : "#4B5563"}
+        stroke={isOverloaded ? (isAlarming && blinkState ? "#FCA5A5" : "#EF4444") : "#4B5563"}
         strokeWidth={2}
         cornerRadius={6}
         offset={{ x: 42, y: 47 }}
@@ -48,6 +70,41 @@ export const Inverter = ({ id, type, x, y, isSelected, properties, onSelect, onD
         shadowOpacity={0.3}
         shadowOffset={{ x: 2, y: 2 }}
       />
+
+      {/* Alarm/Buzzer Indicator */}
+      {isAlarming && (
+        <Group x={35} y={-40}>
+          {/* Bell icon */}
+          <Circle
+            x={0}
+            y={0}
+            radius={6}
+            fill={blinkState ? "#EF4444" : "#FCA5A5"}
+            stroke="#DC2626"
+            strokeWidth={1}
+          />
+          <Text
+            text="🔔"
+            fontSize={8}
+            x={-3}
+            y={-3}
+            listening={false}
+          />
+          {/* Countdown timer */}
+          <Text
+            text={`${remainingTime}s`}
+            fontSize={6}
+            fill={blinkState ? "#FFFFFF" : "#FCA5A5"}
+            fontStyle="bold"
+            x={0}
+            y={8}
+            width={12}
+            offsetX={6}
+            align="center"
+            listening={false}
+          />
+        </Group>
+      )}
 
       {/* Label */}
       <Text
