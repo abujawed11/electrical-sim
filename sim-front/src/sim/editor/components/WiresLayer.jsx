@@ -13,7 +13,7 @@ export const WiresLayer = () => {
   const simulationState = useEditorStore((state) => state.simulationState);
 
   // Destructure sets for cleaner lookups
-  const { livePhaseSet, neutralSet, earthSet, protectedPhaseSet, protectedNeutralSet } = simulationState;
+  const { livePhaseSet, neutralSet, earthSet, protectedPhaseSet, protectedNeutralSet, phaseRSet, phaseYSet, phaseBSet } = simulationState;
 
   return (
     <Group>
@@ -44,10 +44,37 @@ export const WiresLayer = () => {
            const fromIdStr = `${wire.from.compId}:${wire.from.terminalId}`;
            const toIdStr = `${wire.to.compId}:${wire.to.terminalId}`;
 
-           if (term.kind === TERMINAL_KINDS.PHASE) {
+           if (term.kind === TERMINAL_KINDS.PHASE_R) {
+              // Red Phase (R)
+              const isEnergized = phaseRSet.has(fromIdStr) && phaseRSet.has(toIdStr);
+
+              if (isEnergized) {
+                  strokeColor = '#EF4444'; // Bright Red
+              } else {
+                  strokeColor = '#7F1D1D'; // Dark Red (not energized)
+              }
+           } else if (term.kind === TERMINAL_KINDS.PHASE_Y) {
+              // Yellow Phase (Y)
+              const isEnergized = phaseYSet.has(fromIdStr) && phaseYSet.has(toIdStr);
+
+              if (isEnergized) {
+                  strokeColor = '#FBBF24'; // Bright Yellow
+              } else {
+                  strokeColor = '#78350F'; // Dark Yellow/Amber (not energized)
+              }
+           } else if (term.kind === TERMINAL_KINDS.PHASE_B) {
+              // Blue Phase (B)
+              const isEnergized = phaseBSet.has(fromIdStr) && phaseBSet.has(toIdStr);
+
+              if (isEnergized) {
+                  strokeColor = '#3B82F6'; // Bright Blue
+              } else {
+                  strokeColor = '#1E3A8A'; // Dark Blue (not energized)
+              }
+           } else if (term.kind === TERMINAL_KINDS.PHASE) {
               const isEnergized = livePhaseSet.has(fromIdStr) && livePhaseSet.has(toIdStr);
               const isProtected = protectedPhaseSet && (protectedPhaseSet.has(fromIdStr) || protectedPhaseSet.has(toIdStr));
-              
+
               if (isEnergized) {
                   strokeColor = isProtected ? '#EF4444' : '#B91C1C'; // Bright Red vs Dark Red
               } else {
