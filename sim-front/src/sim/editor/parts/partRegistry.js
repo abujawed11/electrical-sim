@@ -23,6 +23,9 @@ import { Geyser } from './Geyser';
 import { JunctionBox } from './JunctionBox';
 import { Inverter } from './Inverter';
 import { Changeover } from './Changeover';
+import { Supply3P } from './Supply3P';
+import { Transformer3P } from './Transformer3P';
+import { Load3P } from './Load3P';
 
 const COMPONENTS = {
   [COMPONENT_TYPES.SUPPLY]: Supply,
@@ -47,6 +50,9 @@ const COMPONENTS = {
   [COMPONENT_TYPES.JUNCTION_BOX]: JunctionBox,
   [COMPONENT_TYPES.INVERTER]: Inverter,
   [COMPONENT_TYPES.CHANGEOVER]: Changeover,
+  [COMPONENT_TYPES.SUPPLY_3P]: Supply3P,
+  [COMPONENT_TYPES.TRANSFORMER_3P]: Transformer3P,
+  [COMPONENT_TYPES.LOAD_3P_BALANCED]: Load3P,
 };
 
 

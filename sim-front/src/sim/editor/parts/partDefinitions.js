@@ -260,4 +260,55 @@ export const PART_DEFINITIONS = {
       { id: 'OUT_N', kind: TERMINAL_KINDS.NEUTRAL, relX: 15, relY: 30, label: 'N' },
     ],
   },
+  [COMPONENT_TYPES.SUPPLY_3P]: {
+    name: '3-Phase Supply',
+    defaultProperties: {
+      label: '3-PH MAINS',
+      enabled: true,
+      voltage: 415,
+    },
+    terminals: [
+      { id: 'R', kind: TERMINAL_KINDS.PHASE_R, relX: -30, relY: 25, label: 'R' },
+      { id: 'Y', kind: TERMINAL_KINDS.PHASE_Y, relX: -10, relY: 25, label: 'Y' },
+      { id: 'B', kind: TERMINAL_KINDS.PHASE_B, relX: 10, relY: 25, label: 'B' },
+      { id: 'N', kind: TERMINAL_KINDS.NEUTRAL, relX: 30, relY: 25, label: 'N' },
+      { id: 'E', kind: TERMINAL_KINDS.EARTH, relX: 50, relY: 25, label: 'E' },
+    ],
+  },
+  [COMPONENT_TYPES.TRANSFORMER_3P]: {
+    name: '3-Phase Transformer',
+    defaultProperties: {
+      label: 'TX-1',
+      kVA: 100,
+      primaryVoltage: 11000, // 11kV
+      secondaryVoltage: 415, // 415V
+      connection: 'DELTA_STAR', // DELTA_STAR, STAR_STAR, etc.
+    },
+    terminals: [
+      // Primary (HV)
+      { id: 'PRI_R', kind: TERMINAL_KINDS.PHASE_R, relX: -40, relY: -40, label: 'HV-R' },
+      { id: 'PRI_Y', kind: TERMINAL_KINDS.PHASE_Y, relX: 0, relY: -40, label: 'HV-Y' },
+      { id: 'PRI_B', kind: TERMINAL_KINDS.PHASE_B, relX: 40, relY: -40, label: 'HV-B' },
+      // Secondary (LV)
+      { id: 'SEC_R', kind: TERMINAL_KINDS.PHASE_R, relX: -40, relY: 40, label: 'r' },
+      { id: 'SEC_Y', kind: TERMINAL_KINDS.PHASE_Y, relX: -15, relY: 40, label: 'y' },
+      { id: 'SEC_B', kind: TERMINAL_KINDS.PHASE_B, relX: 15, relY: 40, label: 'b' },
+      { id: 'SEC_N', kind: TERMINAL_KINDS.NEUTRAL, relX: 40, relY: 40, label: 'n' },
+    ],
+  },
+  [COMPONENT_TYPES.LOAD_3P_BALANCED]: {
+    name: '3-Phase Load (Motor)',
+    defaultProperties: {
+      label: 'M-1',
+      powerKW: 5,
+      powerFactor: 0.85,
+      type: 'MOTOR',
+    },
+    terminals: [
+      { id: 'R', kind: TERMINAL_KINDS.PHASE_R, relX: -20, relY: 30, label: 'R' },
+      { id: 'Y', kind: TERMINAL_KINDS.PHASE_Y, relX: 0, relY: 30, label: 'Y' },
+      { id: 'B', kind: TERMINAL_KINDS.PHASE_B, relX: 20, relY: 30, label: 'B' },
+      { id: 'E', kind: TERMINAL_KINDS.EARTH, relX: 40, relY: 30, label: 'E' },
+    ],
+  },
 };

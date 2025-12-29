@@ -1,7 +1,10 @@
-import { LESSON_PATH } from './lessonPathSinglePhase';
+import { LESSON_PATH as SINGLE_PHASE_PATH } from './lessonPathSinglePhase';
+import { LESSON_PATH_THREE_PHASE } from './lessonPathThreePhase';
+
+export const ALL_LESSONS = [...SINGLE_PHASE_PATH, ...LESSON_PATH_THREE_PHASE];
 
 export const validateLesson = (lessonId, components, wires, simulationState) => {
-  const lesson = LESSON_PATH.find(l => l.id === lessonId);
+  const lesson = ALL_LESSONS.find(l => l.id === lessonId);
   if (!lesson) return { passed: false, checklist: [] };
 
   // 1. Run basic topology validation
@@ -27,4 +30,4 @@ export const validateLesson = (lessonId, components, wires, simulationState) => 
   return { passed, checklist };
 };
 
-export const getLesson = (id) => LESSON_PATH.find(l => l.id === id);
+export const getLesson = (id) => ALL_LESSONS.find(l => l.id === id);

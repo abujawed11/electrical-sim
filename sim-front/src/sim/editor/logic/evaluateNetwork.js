@@ -3,27 +3,33 @@ import { PART_DEFINITIONS as PART_REGISTRY } from '../parts/partDefinitions';
 
 /**
  * Recomputes the electrical network state.
+ * Supports Single Phase and 3-Phase systems.
  * 
  * @param {Array} components - List of all components in the scene
  * @param {Array} wires - List of all wires
- * @returns {Object} { livePhaseSet, neutralSet, earthSet, socketStates, protectedPhaseSet, protectedNeutralSet }
+ * @returns {Object} { livePhaseSet, neutralSet, earthSet, phaseRSet, phaseYSet, phaseBSet, ... }
  */
 export const evaluateNetwork = (components, wires) => {
-  const livePhaseSet = new Set();
+  // Sets for energized terminals
+  const phaseRSet = new Set();
+  const phaseYSet = new Set();
+  const phaseBSet = new Set();
+  const livePhaseSet = new Set(); // Legacy/Union of R+Y+B+Generic
+  
   const neutralSet = new Set();
   const earthSet = new Set();
+  
   const socketStates = {};
-
-  // Sets for protection analysis
   const protectedPhaseSet = new Set();
   const protectedNeutralSet = new Set();
 
   // 1. Build Adjacency Graphs (Full Connectivity)
-  const phaseGraph = new Map();
+  // We share the graph for all phases because wires are generic conductors.
+  // We propagate different sources through the same graph.
+  const conductorGraph = new Map();
   const neutralGraph = new Map();
   const earthGraph = new Map();
 
-  // Helper to add undirected edge
   const addEdge = (graph, nodeA, nodeB) => {
     if (!graph.has(nodeA)) graph.set(nodeA, []);
     if (!graph.has(nodeB)) graph.set(nodeB, []);
@@ -40,14 +46,16 @@ export const evaluateNetwork = (components, wires) => {
     const registry = PART_REGISTRY[comp.type];
     const term = registry.terminals.find(t => t.id === wire.from.terminalId);
     if (term) {
-      if (term.kind === TERMINAL_KINDS.PHASE || term.kind === TERMINAL_KINDS.GENERIC) addEdge(phaseGraph, fromId, toId);
+      // Phase/Generic wires conduct Phases
+      if (term.kind.startsWith('PHASE') || term.kind === TERMINAL_KINDS.GENERIC) addEdge(conductorGraph, fromId, toId);
+      // Neutral/Generic wires conduct Neutral
       if (term.kind === TERMINAL_KINDS.NEUTRAL || term.kind === TERMINAL_KINDS.GENERIC) addEdge(neutralGraph, fromId, toId);
+      // Earth/Generic wires conduct Earth
       if (term.kind === TERMINAL_KINDS.EARTH || term.kind === TERMINAL_KINDS.GENERIC) addEdge(earthGraph, fromId, toId);
     }
   });
 
   // Add Internal Connections (Device Logic)
-  // We track RCCBs to handle protection logic later
   const rccbList = [];
 
   components.forEach(comp => {
@@ -55,19 +63,19 @@ export const evaluateNetwork = (components, wires) => {
     if (!registryItem) return;
 
     if (comp.type === COMPONENT_TYPES.MCB) {
-      if (comp.properties.isOn) addEdge(phaseGraph, `${comp.id}:LIN`, `${comp.id}:LOUT`);
+      if (comp.properties.isOn) addEdge(conductorGraph, `${comp.id}:LIN`, `${comp.id}:LOUT`);
     } 
     else if (comp.type === COMPONENT_TYPES.SWITCH) {
-      if (comp.properties.isOn) addEdge(phaseGraph, `${comp.id}:IN_L`, `${comp.id}:OUT_L`);
+      if (comp.properties.isOn) addEdge(conductorGraph, `${comp.id}:IN_L`, `${comp.id}:OUT_L`);
     } 
     else if (comp.type === COMPONENT_TYPES.METER) {
-      addEdge(phaseGraph, `${comp.id}:IN_L`, `${comp.id}:OUT_L`);
+      addEdge(conductorGraph, `${comp.id}:IN_L`, `${comp.id}:OUT_L`);
       addEdge(neutralGraph, `${comp.id}:IN_N`, `${comp.id}:OUT_N`);
     } 
     else if (comp.type === COMPONENT_TYPES.RCCB || comp.type === COMPONENT_TYPES.RCBO) {
       rccbList.push(comp);
       if (comp.properties.isOn && !comp.properties.isTripped) {
-         addEdge(phaseGraph, `${comp.id}:L_IN`, `${comp.id}:L_OUT`);
+         addEdge(conductorGraph, `${comp.id}:L_IN`, `${comp.id}:L_OUT`);
          addEdge(neutralGraph, `${comp.id}:N_IN`, `${comp.id}:N_OUT`);
       }
     }
@@ -84,95 +92,145 @@ export const evaluateNetwork = (components, wires) => {
       const inT = terms.find(t => t.id === 'IN');
       if (inT) {
          terms.forEach(t => {
-            if (t.id !== 'IN') addEdge(phaseGraph, `${comp.id}:IN`, `${comp.id}:${t.id}`);
+            if (t.id !== 'IN') addEdge(conductorGraph, `${comp.id}:IN`, `${comp.id}:${t.id}`);
          });
       }
     }
     else if (comp.type === COMPONENT_TYPES.JUNCTION_BOX) {
-      // Connect all terminals to each other in ALL graphs
       const terms = registryItem.terminals;
-      // Simple chain
       for (let i = 0; i < terms.length - 1; i++) {
           const u = `${comp.id}:${terms[i].id}`;
           const v = `${comp.id}:${terms[i+1].id}`;
-          addEdge(phaseGraph, u, v);
+          addEdge(conductorGraph, u, v);
           addEdge(neutralGraph, u, v);
           addEdge(earthGraph, u, v);
       }
     }
     else if (comp.type === COMPONENT_TYPES.CHANGEOVER) {
       if (comp.properties.position === 'MAINS') {
-          addEdge(phaseGraph, `${comp.id}:A_L`, `${comp.id}:OUT_L`);
+          addEdge(conductorGraph, `${comp.id}:A_L`, `${comp.id}:OUT_L`);
           addEdge(neutralGraph, `${comp.id}:A_N`, `${comp.id}:OUT_N`);
       } else if (comp.properties.position === 'INVERTER') {
-          addEdge(phaseGraph, `${comp.id}:B_L`, `${comp.id}:OUT_L`);
+          addEdge(conductorGraph, `${comp.id}:B_L`, `${comp.id}:OUT_L`);
           addEdge(neutralGraph, `${comp.id}:B_N`, `${comp.id}:OUT_N`);
       }
     }
     else if (comp.type === COMPONENT_TYPES.INVERTER) {
         if (comp.properties.isBypassMode) {
-            addEdge(phaseGraph, `${comp.id}:AC_IN_L`, `${comp.id}:AC_OUT_L`);
+            addEdge(conductorGraph, `${comp.id}:AC_IN_L`, `${comp.id}:AC_OUT_L`);
             addEdge(neutralGraph, `${comp.id}:AC_IN_N`, `${comp.id}:AC_OUT_N`);
         }
     }
+    // 3-Phase Devices usually don't have internal phase-to-phase shorts unless faulted.
+    // Supply and Transformers are sources, handled below.
   });
 
-  // 2. Identify Sources
-  const supplies = components.filter(c => c.type === COMPONENT_TYPES.SUPPLY && c.properties.enabled);
-  
-  const phaseSources = [];
+  // 2. Identify Primary Sources (Mains, Generators)
+  const phaseRSources = [];
+  const phaseYSources = [];
+  const phaseBSources = [];
+  const genericPhaseSources = []; // For Single Phase Supply L
   const neutralSources = [];
   const earthSources = [];
 
-  supplies.forEach(supply => {
-    phaseSources.push(`${supply.id}:L`);
-    neutralSources.push(`${supply.id}:N`);
-    earthSources.push(`${supply.id}:E`);
+  // Single Phase Supplies
+  components.filter(c => c.type === COMPONENT_TYPES.SUPPLY && c.properties.enabled).forEach(s => {
+      genericPhaseSources.push(`${s.id}:L`);
+      neutralSources.push(`${s.id}:N`);
+      earthSources.push(`${s.id}:E`);
   });
 
-  // Inverter is a source ONLY if NOT in bypass mode (and enabled/charged)
-  // NOTE: Don't check isOverloaded here - inverter continues outputting during alarm period
-  // It only stops when enabled=false (after shutdown delay)
-  const inverters = components.filter(c =>
-      c.type === COMPONENT_TYPES.INVERTER &&
-      c.properties.enabled &&
-      c.properties.socWh > 0 &&
+  // 3-Phase Supplies
+  components.filter(c => c.type === COMPONENT_TYPES.SUPPLY_3P && c.properties.enabled).forEach(s => {
+      phaseRSources.push(`${s.id}:R`);
+      phaseYSources.push(`${s.id}:Y`);
+      phaseBSources.push(`${s.id}:B`);
+      neutralSources.push(`${s.id}:N`);
+      earthSources.push(`${s.id}:E`);
+  });
+
+  // Inverters (Source if active and NOT in bypass)
+  components.filter(c => 
+      c.type === COMPONENT_TYPES.INVERTER && 
+      c.properties.enabled && 
+      c.properties.socWh > 0 && 
+      !c.properties.isOverloaded &&
       !c.properties.isBypassMode
-  );
-
-  inverters.forEach(inv => {
-    phaseSources.push(`${inv.id}:AC_OUT_L`);
-    neutralSources.push(`${inv.id}:AC_OUT_N`);
+  ).forEach(inv => {
+      genericPhaseSources.push(`${inv.id}:AC_OUT_L`);
+      neutralSources.push(`${inv.id}:AC_OUT_N`);
   });
 
-  // 3. BFS Propagation (Energization)
-  const propagate = (sources, graph, resultSets) => {
+  // 3. Propagation Helper
+  const propagate = (sources, graph, resultSet) => {
     const queue = [...sources];
-    sources.forEach(s => resultSets.add(s));
+    sources.forEach(s => resultSet.add(s));
     while (queue.length > 0) {
       const current = queue.shift();
       const neighbors = graph.get(current) || [];
       neighbors.forEach(next => {
-        if (!resultSets.has(next)) {
-          resultSets.add(next);
+        if (!resultSet.has(next)) {
+          resultSet.add(next);
           queue.push(next);
         }
       });
     }
   };
 
-  propagate(phaseSources, phaseGraph, livePhaseSet);
+  // 4. Propagate Primary Sources
+  propagate(phaseRSources, conductorGraph, phaseRSet);
+  propagate(phaseYSources, conductorGraph, phaseYSet);
+  propagate(phaseBSources, conductorGraph, phaseBSet);
+  propagate(genericPhaseSources, conductorGraph, livePhaseSet); // Generic L -> livePhaseSet
   propagate(neutralSources, neutralGraph, neutralSet);
   propagate(earthSources, earthGraph, earthSet);
 
-  // 4. Protection Analysis (Isolated Graph)
-  // We perform BFS starting from RCCB Outputs, but using a graph where RCCB internal edges are REMOVED.
-  // This tells us "What is downstream of RCCB".
-  // Note: We reuse the wire connections, but we must NOT use the RCCB internal edges we added above.
-  // Easiest way: Rebuild graph without RCCB internals, or just clone and remove? 
-  // Map clone is shallow. We need to copy array values. 
-  // Better: Just build a "protectionGraph" from wires + non-RCCB devices.
+  // 5. Handle Transformers (Secondary Sources)
+  // Check if Primaries are energized, then add Secondaries as sources and propagate again.
+  const transformers = components.filter(c => c.type === COMPONENT_TYPES.TRANSFORMER_3P);
   
+  if (transformers.length > 0) {
+      const txRSources = [];
+      const txYSources = [];
+      const txBSources = [];
+      const txNSources = [];
+
+      transformers.forEach(tx => {
+          // Check Primary Energization
+          // We check if the Primary terminals are in the propagated sets
+          const hasR = phaseRSet.has(`${tx.id}:PRI_R`) || livePhaseSet.has(`${tx.id}:PRI_R`);
+          const hasY = phaseYSet.has(`${tx.id}:PRI_Y`) || livePhaseSet.has(`${tx.id}:PRI_Y`);
+          const hasB = phaseBSet.has(`${tx.id}:PRI_B`) || livePhaseSet.has(`${tx.id}:PRI_B`);
+          
+          // Simplified: If all 3 phases are present (or generic live present on all), energize secondary
+          // Ideally check correct phase sequence, but simple presence is enough for now.
+          if (hasR && hasY && hasB) {
+              txRSources.push(`${tx.id}:SEC_R`);
+              txYSources.push(`${tx.id}:SEC_Y`);
+              txBSources.push(`${tx.id}:SEC_B`);
+              
+              // Secondary Neutral available if Star connection
+              // DELTA_STAR or STAR_STAR
+              if (tx.properties.connection && tx.properties.connection.endsWith('STAR')) {
+                  txNSources.push(`${tx.id}:SEC_N`);
+              }
+          }
+      });
+
+      // Propagate Secondary Sources
+      propagate(txRSources, conductorGraph, phaseRSet);
+      propagate(txYSources, conductorGraph, phaseYSet);
+      propagate(txBSources, conductorGraph, phaseBSet);
+      propagate(txNSources, neutralGraph, neutralSet);
+  }
+
+  // 6. Merge Sets for Legacy/Generic components
+  // Any terminal in R, Y, or B sets is considered "Live" for single-phase generic components
+  phaseRSet.forEach(t => livePhaseSet.add(t));
+  phaseYSet.forEach(t => livePhaseSet.add(t));
+  phaseBSet.forEach(t => livePhaseSet.add(t));
+
+  // 7. Protection Analysis (Isolated Graph for RCCB/RCBO)
   const protPhaseGraph = new Map();
   const protNeutralGraph = new Map();
 
@@ -185,7 +243,7 @@ export const evaluateNetwork = (components, wires) => {
     const registry = PART_REGISTRY[comp.type];
     const term = registry.terminals.find(t => t.id === wire.from.terminalId);
     if (term) {
-      if (term.kind === TERMINAL_KINDS.PHASE || term.kind === TERMINAL_KINDS.GENERIC) addEdge(protPhaseGraph, fromId, toId);
+      if (term.kind.startsWith('PHASE') || term.kind === TERMINAL_KINDS.GENERIC) addEdge(protPhaseGraph, fromId, toId);
       if (term.kind === TERMINAL_KINDS.NEUTRAL || term.kind === TERMINAL_KINDS.GENERIC) addEdge(protNeutralGraph, fromId, toId);
     }
   });
@@ -230,11 +288,6 @@ export const evaluateNetwork = (components, wires) => {
   const rccbNeutralOuts = [];
   
   rccbList.forEach(rccb => {
-      // Regardless of ON/OFF, the output side is the "Protected Zone" conceptually.
-      // But physically, it's only energized if ON. 
-      // We want to visualize "Protected Wiring" even if OFF? 
-      // Prompt says "Neutral wires after RCCB highlighted as protected neutral".
-      // Usually static property of topology.
       rccbPhaseOuts.push(`${rccb.id}:L_OUT`);
       rccbNeutralOuts.push(`${rccb.id}:N_OUT`);
   });
@@ -242,7 +295,7 @@ export const evaluateNetwork = (components, wires) => {
   propagate(rccbPhaseOuts, protPhaseGraph, protectedPhaseSet);
   propagate(rccbNeutralOuts, protNeutralGraph, protectedNeutralSet);
 
-  // 5. Compute Socket States
+  // 8. Compute Socket States
   components.forEach(comp => {
     if (comp.type === COMPONENT_TYPES.SOCKET) {
       const hasL = livePhaseSet.has(`${comp.id}:L`);
@@ -267,10 +320,7 @@ export const evaluateNetwork = (components, wires) => {
 
       // Bypass Check
       if (isProtL && !isProtN && hasN) {
-          // It has Phase from RCCB, but Neutral NOT from RCCB (but has Neutral from somewhere, likely raw)
           warning = 'NEUTRAL_BYPASS'; 
-          // Override status to indicate fault/warning visual?
-          // The socket works, but is unsafe.
           status = 'UNSAFE_BYPASS';
       }
 
@@ -284,5 +334,5 @@ export const evaluateNetwork = (components, wires) => {
     }
   });
 
-  return { livePhaseSet, neutralSet, earthSet, socketStates, protectedPhaseSet, protectedNeutralSet };
+  return { livePhaseSet, neutralSet, earthSet, socketStates, protectedPhaseSet, protectedNeutralSet, phaseRSet, phaseYSet, phaseBSet };
 };

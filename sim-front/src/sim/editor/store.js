@@ -6,11 +6,13 @@ import { evaluateNetwork } from './logic/evaluateNetwork';
 import { evaluateFaults } from './logic/evaluateFaults';
 import { evaluateLoads } from './logic/evaluateLoads';
 import { evaluateAutoChangeover } from './logic/evaluateAutoChangeover';
-import { validateLesson, getLesson } from './lessons/lessonEngine';
-import { LESSON_PATH } from './lessons/lessonPathSinglePhase';
+import { validateLesson, getLesson, ALL_LESSONS } from './lessons/lessonEngine';
 
 const DEFAULT_SIM_STATE = {
   livePhaseSet: new Set(),
+  phaseRSet: new Set(),
+  phaseYSet: new Set(),
+  phaseBSet: new Set(),
   neutralSet: new Set(),
   earthSet: new Set(),
   socketStates: {},
@@ -330,17 +332,17 @@ export const useEditorStore = create(
 
       nextLesson: () => {
         const { activeLessonId } = get();
-        const idx = LESSON_PATH.findIndex(l => l.id === activeLessonId);
-        if (idx < LESSON_PATH.length - 1) {
-            get().startLesson(LESSON_PATH[idx + 1].id);
+        const idx = ALL_LESSONS.findIndex(l => l.id === activeLessonId);
+        if (idx < ALL_LESSONS.length - 1) {
+            get().startLesson(ALL_LESSONS[idx + 1].id);
         }
       },
 
       prevLesson: () => {
         const { activeLessonId } = get();
-        const idx = LESSON_PATH.findIndex(l => l.id === activeLessonId);
+        const idx = ALL_LESSONS.findIndex(l => l.id === activeLessonId);
         if (idx > 0) {
-            get().startLesson(LESSON_PATH[idx - 1].id);
+            get().startLesson(ALL_LESSONS[idx - 1].id);
         }
       },
 
