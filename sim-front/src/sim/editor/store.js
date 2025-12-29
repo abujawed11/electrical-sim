@@ -104,22 +104,39 @@ export const useEditorStore = create(
                  const loadStats = simulationState.deviceLoads?.[c.id];
                  const loadP = loadStats?.P || 0;
                  const loadS = loadStats?.S || 0;
-                 
+
                  let newSoc = c.properties.socWh;
                  let newOverloaded = false;
+                 let isCharging = false;
 
+                 // Check overload
                  if (loadS > c.properties.capacityVA) newOverloaded = true;
-                 if (c.properties.socWh > 0 && loadP > 0) {
-                     newSoc = Math.max(0, c.properties.socWh - (loadP * dtHours));
+
+                 // Battery charging/discharging logic
+                 const maxBattery = c.properties.batteryWh || 1200;
+                 const chargingPowerW = c.properties.chargingPowerW || 200; // Default 200W charging rate
+
+                 if (c.properties.isBypassMode) {
+                     // Bypass mode (mains available) - Charge battery
+                     if (newSoc < maxBattery) {
+                         newSoc = Math.min(maxBattery, newSoc + (chargingPowerW * dtHours));
+                         isCharging = true;
+                     }
+                 } else {
+                     // Inverter mode (no mains) - Discharge battery
+                     if (c.properties.socWh > 0 && loadP > 0) {
+                         newSoc = Math.max(0, c.properties.socWh - (loadP * dtHours));
+                     }
                  }
 
-                 const socChanged = Math.abs(newSoc - c.properties.socWh) > 0.001; 
+                 const socChanged = Math.abs(newSoc - c.properties.socWh) > 0.001;
                  const overloadChanged = newOverloaded !== c.properties.isOverloaded;
+                 const chargingChanged = (c.properties.isCharging || false) !== isCharging;
 
-                 if (socChanged || overloadChanged) {
+                 if (socChanged || overloadChanged || chargingChanged) {
                      componentsChanged = true;
                      if (c.properties.socWh > 0 && newSoc === 0) needReeval = true;
-                     return { ...c, properties: { ...c.properties, socWh: newSoc, isOverloaded: newOverloaded } };
+                     return { ...c, properties: { ...c.properties, socWh: newSoc, isOverloaded: newOverloaded, isCharging } };
                  }
              }
              

@@ -10,7 +10,7 @@ export const Inverter = ({ id, type, x, y, isSelected, properties, onSelect, onD
   const setHoveredTerminal = useEditorStore((state) => state.setHoveredTerminal);
   const simulationState = useEditorStore((state) => state.simulationState);
 
-  const { label, capacityVA, batteryWh, socWh, enabled, isOverloaded } = properties;
+  const { label, capacityVA, batteryWh, socWh, enabled, isOverloaded, isCharging, status } = properties;
   const socPercent = Math.max(0, Math.min(100, (socWh / batteryWh) * 100));
 
   return (
@@ -82,6 +82,20 @@ export const Inverter = ({ id, type, x, y, isSelected, properties, onSelect, onD
             fill={socPercent > 20 ? "#10B981" : "#EF4444"}
             cornerRadius={1}
           />
+
+          {/* Charging Indicator - Lightning Bolt */}
+          {isCharging && socPercent < 100 && (
+            <Group x={32} y={1}>
+              <Line
+                points={[0, 0, -3, 4, -1, 4, -4, 8, 2, 3, 0, 3, 3, 0]}
+                fill="#FCD34D"
+                stroke="#F59E0B"
+                strokeWidth={0.5}
+                closed
+              />
+            </Group>
+          )}
+
           <Text
             text={`${Math.round(socPercent)}%`}
             fontSize={9}
@@ -93,10 +107,49 @@ export const Inverter = ({ id, type, x, y, isSelected, properties, onSelect, onD
             align="center"
             listening={false}
           />
+
+          {/* Charging Status Text */}
+          {isCharging && socPercent < 100 && (
+            <Text
+              text="CHARGING"
+              fontSize={7}
+              fill="#FCD34D"
+              x={0}
+              y={22}
+              width={60}
+              offsetX={30}
+              align="center"
+              listening={false}
+            />
+          )}
+      </Group>
+
+      {/* Mode Badge */}
+      <Group y={8}>
+          <Rect
+            x={-20}
+            y={0}
+            width={40}
+            height={10}
+            fill={status === 'Mains (Bypass)' ? '#3B82F6' : '#8B5CF6'}
+            cornerRadius={2}
+          />
+          <Text
+            text={status === 'Mains (Bypass)' ? 'BYPASS' : 'BATTERY'}
+            fontSize={7}
+            fontStyle="bold"
+            fill="white"
+            x={0}
+            y={2}
+            width={40}
+            offsetX={20}
+            align="center"
+            listening={false}
+          />
       </Group>
 
       {/* Status Indicators */}
-      <Group y={25}>
+      <Group y={28}>
           <Circle
             x={-15}
             y={0}

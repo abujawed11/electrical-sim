@@ -225,6 +225,7 @@ export const PART_DEFINITIONS = {
       chargingPowerW: 200, // Charging rate
       enabled: true,
       isOverloaded: false,
+      isCharging: false,
       isBypassMode: false, // Internal relay state: true = Mains->Out, false = Battery->Out
       status: 'Inverter', // 'Mains (Bypass)' or 'Inverter'
     },
