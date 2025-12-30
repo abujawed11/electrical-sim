@@ -271,6 +271,10 @@ export const evaluateLoads = (components, wires, simulationState, voltages) => {
 
               const meters = findUpstreamMeters(termL, phaseGraph, components);
               meters.forEach(mId => addToDevice(mId));
+
+              // Also allow a 3-phase meter to measure single-phase branch energy if the branch is fed through one of its phases.
+              const meters3P = findUpstreamMeters3P(termL, phaseGraph, components);
+              meters3P.forEach(mId => addToDevice(mId));
           }
       }
 
@@ -425,8 +429,8 @@ function findUpstreamMeters(startNode, graph, components) {
         const comp = components.find(c => c.id === compId);
 
         if (comp?.type === COMPONENT_TYPES.METER) {
-            // Heuristic: if the load-side is connected to OUT_L, treat this meter as upstream of that load.
-            if (termId === 'OUT_L') meters.add(comp.id);
+            // Graph is undirected; accept either side so reversed wiring still works.
+            if (termId === 'IN_L' || termId === 'OUT_L') meters.add(comp.id);
         }
 
         const neighbors = graph.get(current) || [];
@@ -453,7 +457,13 @@ function findUpstreamMeters3P(startNode, graph, components) {
         const comp = components.find(c => c.id === compId);
 
         if (comp?.type === COMPONENT_TYPES.METER_3P) {
-            if (termId === 'OUT_R' || termId === 'OUT_Y' || termId === 'OUT_B') meters.add(comp.id);
+            // Graph is undirected; accept either side so reversed wiring still works.
+            if (
+                termId === 'IN_R' || termId === 'IN_Y' || termId === 'IN_B' ||
+                termId === 'OUT_R' || termId === 'OUT_Y' || termId === 'OUT_B'
+            ) {
+                meters.add(comp.id);
+            }
         }
 
         const neighbors = graph.get(current) || [];
