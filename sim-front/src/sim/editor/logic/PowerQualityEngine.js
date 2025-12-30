@@ -20,7 +20,7 @@ export const DEFAULT_PQ_CONFIG = {
     sagSmoothingTau: 1.0, // Voltage smoothing time constant (sec)
     
     // Noise
-    noiseAmplitude: 3.0, // Volts
+    noiseAmplitude: 15.0, // Volts
 };
 
 export const DEFAULT_PQ_STATE = {
