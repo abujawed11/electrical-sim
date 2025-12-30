@@ -12,6 +12,10 @@ export const PropertiesPanel = () => {
   const removeComponent = useEditorStore((state) => state.removeComponent);
   const deleteWire = useEditorStore((state) => state.deleteWire);
   const simulationState = useEditorStore((state) => state.simulationState);
+  const energyByMeterKWh = useEditorStore((state) => state.energyByMeterKWh);
+  const energyBy3PMeterKWh = useEditorStore((state) => state.energyBy3PMeterKWh);
+  const resetMeterEnergy = useEditorStore((state) => state.resetMeterEnergy);
+  const reset3PMeterEnergy = useEditorStore((state) => state.reset3PMeterEnergy);
 
   // Computed data
   const { loadData, deviceLoads } = simulationState;
@@ -278,6 +282,25 @@ export const PropertiesPanel = () => {
         
         {(selectedComponent.type === COMPONENT_TYPES.METER || selectedComponent.type === COMPONENT_TYPES.METER_3P) && (
             <div className="space-y-3">
+                <div className="p-2 bg-gray-900 rounded border border-gray-700">
+                    <div className="text-gray-400 text-xs">This Meter Reading</div>
+                    <div className="text-yellow-400 font-mono text-xl">
+                        {selectedComponent.type === COMPONENT_TYPES.METER
+                            ? ((energyByMeterKWh?.[selectedComponent.id] ?? 0).toFixed(3))
+                            : ((energyBy3PMeterKWh?.[selectedComponent.id] ?? 0).toFixed(3))
+                        } kWh
+                    </div>
+                    <button
+                        onClick={() => {
+                            if (selectedComponent.type === COMPONENT_TYPES.METER) resetMeterEnergy(selectedComponent.id);
+                            else reset3PMeterEnergy(selectedComponent.id);
+                        }}
+                        className="mt-2 w-full py-2 bg-yellow-700/40 hover:bg-yellow-700 text-yellow-100 rounded border border-yellow-600 transition-colors text-xs font-bold"
+                        title="Reset only this meter"
+                    >
+                        Reset This Meter
+                    </button>
+                </div>
                 <div className="space-y-1">
                     <label className="text-xs text-gray-400 block">Rate per Unit (₹/kWh)</label>
                     <input

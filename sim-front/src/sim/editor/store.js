@@ -449,6 +449,20 @@ export const useEditorStore = create(
            set({ energyKWh: 0, energy3PhaseKWh: 0, energyByMeterKWh: {}, energyBy3PMeterKWh: {} });
        },
 
+      resetMeterEnergy: (meterId) => {
+          if (!meterId) return;
+          set(state => ({
+              energyByMeterKWh: { ...(state.energyByMeterKWh || {}), [meterId]: 0 }
+          }));
+      },
+
+      reset3PMeterEnergy: (meterId) => {
+          if (!meterId) return;
+          set(state => ({
+              energyBy3PMeterKWh: { ...(state.energyBy3PMeterKWh || {}), [meterId]: 0 }
+          }));
+      },
+
       tickEnergy: (now) => {
           const { simRunning, lastTickMs, timeScale, simulationState, components, pqConfig, pqState, energyKWh, energy3PhaseKWh, lastPQReevalMs, energyByMeterKWh, energyBy3PMeterKWh } = get();
           if (!simRunning) {
