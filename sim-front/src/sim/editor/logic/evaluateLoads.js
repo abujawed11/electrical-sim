@@ -28,7 +28,13 @@ export const evaluateLoads = (components, wires, simulationState, voltages) => {
   const V_Y = (typeof voltages === 'object') ? voltages.Y : voltages;
   const V_B = (typeof voltages === 'object') ? voltages.B : voltages;
   // Fallback for Generic
-  const V_Gen = V_R; 
+  const V_Gen = V_R;
+
+  // Debug: Show when voltage sag/brownout is happening
+  if (typeof voltages === 'object' && (V_R < 220 || V_Y < 220 || V_B < 220)) {
+      console.log('[LOAD CALC] ⚡ VOLTAGE SAG DETECTED!');
+      console.log('[LOAD CALC] R:', Math.round(V_R), 'V | Y:', Math.round(V_Y), 'V | B:', Math.round(V_B), 'V');
+  } 
 
   const { livePhaseSet, neutralSet, phaseRSet, phaseYSet, phaseBSet } = simulationState;
 
@@ -124,9 +130,14 @@ export const evaluateLoads = (components, wires, simulationState, voltages) => {
           // Calculations
           // Avoid div/0
           const effV = V < 1 ? 1 : V;
-          
+
           const S = isPowered ? P / pf : 0;
           const I = isPowered ? S / effV : 0;
+
+          // Debug: Show voltage affecting current calculation
+          if (isPowered && Math.abs(V - 230) > 5) {
+              console.log(`[LOAD CALC] ${comp.properties.label || comp.type}: V=${Math.round(V)}V → I=${I.toFixed(2)}A (P=${P}W)`);
+          }
           let Q = isPowered ? Math.sqrt(Math.max(0, S*S - P*P)) : 0;
           
           if (type === 'CAPACITIVE') Q = -Q;

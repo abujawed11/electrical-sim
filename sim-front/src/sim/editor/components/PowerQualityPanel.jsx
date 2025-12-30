@@ -162,18 +162,34 @@ export const PowerQualityPanel = () => {
 };
 
 const PhaseIndicator = ({ label, voltage, active }) => {
-    // Color logic
+    // Color logic and status text
     let color = 'text-green-400';
-    if (!active) color = 'text-red-500 font-bold';
-    else if (voltage < 210) color = 'text-yellow-400';
-    else if (voltage > 250) color = 'text-red-400';
+    let status = '';
+    if (!active) {
+        color = 'text-red-500 font-bold';
+        status = 'OUTAGE';
+    } else if (voltage < 200) {
+        color = 'text-orange-500';
+        status = 'CRITICAL';
+    } else if (voltage < 210) {
+        color = 'text-yellow-400';
+        status = 'LOW';
+    } else if (voltage > 250) {
+        color = 'text-red-400';
+        status = 'HIGH';
+    } else {
+        status = 'NORMAL';
+    }
 
     return (
         <div className="bg-gray-800 p-1 rounded border border-gray-700 flex flex-col items-center">
             <span className={`text-[10px] font-bold ${active ? 'text-gray-400' : 'text-red-500'}`}>{label}</span>
             <span className={`text-xs font-mono ${color}`}>
-                {active ? Math.round(voltage) : 'OFF'}
+                {active ? Math.round(voltage) + 'V' : 'OFF'}
             </span>
+            {active && status !== 'NORMAL' && (
+                <span className={`text-[9px] ${color}`}>{status}</span>
+            )}
         </div>
     );
 };
