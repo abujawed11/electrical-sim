@@ -1,5 +1,6 @@
 import { COMPONENT_TYPES, TERMINAL_KINDS } from '../types';
 import { PART_DEFINITIONS as PART_REGISTRY } from '../parts/partDefinitions';
+import { phasorForPhaseLN, phasorZero } from './phasor';
 
 /**
  * Recomputes the electrical network state.
@@ -8,9 +9,10 @@ import { PART_DEFINITIONS as PART_REGISTRY } from '../parts/partDefinitions';
  * @param {Array} components - List of all components in the scene
  * @param {Array} wires - List of all wires
  * @param {Object} pqStatus - Optional { R, Y, B } boolean status
+ * @param {Object} voltageModel - Optional { lvBaseVoltageLN: number, gridMultiplier: {R,Y,B} }
  * @returns {Object} { livePhaseSet, neutralSet, earthSet, phaseRSet, ... hvPhaseRSet ... }
  */
-export const evaluateNetwork = (components, wires, pqStatus) => {
+export const evaluateNetwork = (components, wires, pqStatus, voltageModel) => {
   // Default to all ON if no status provided
   const statusR = pqStatus ? pqStatus.R : true;
   const statusY = pqStatus ? pqStatus.Y : true;
@@ -38,6 +40,31 @@ export const evaluateNetwork = (components, wires, pqStatus) => {
   const socketStates = {};
   const protectedPhaseSet = new Set();
   const protectedNeutralSet = new Set();
+
+  const lvBaseVoltageLN = voltageModel?.lvBaseVoltageLN ?? 230;
+  const gridMultiplier = voltageModel?.gridMultiplier ?? { R: 1, Y: 1, B: 1 };
+
+  const gridLvPhaseVoltagesLN = {
+    R: lvBaseVoltageLN * (gridMultiplier.R ?? 1),
+    Y: lvBaseVoltageLN * (gridMultiplier.Y ?? 1),
+    B: lvBaseVoltageLN * (gridMultiplier.B ?? 1),
+  };
+
+  const terminalVoltageLN = Object.create(null);
+  const terminalPhasors = Object.create(null);
+  const terminalMeta = Object.create(null);
+
+  const upsertTerminalPhasor = (terminalId, system, phase, vLN) => {
+    const prev = terminalVoltageLN[terminalId];
+    if (prev != null && prev >= vLN) return;
+    terminalVoltageLN[terminalId] = vLN;
+    terminalMeta[terminalId] = { system, phase };
+    if (!phase || vLN <= 0) {
+      terminalPhasors[terminalId] = phasorZero();
+      return;
+    }
+    terminalPhasors[terminalId] = phasorForPhaseLN(phase, vLN);
+  };
 
   // 1. Build Adjacency Graphs (Full Connectivity)
   const conductorGraph = new Map();
@@ -176,23 +203,35 @@ export const evaluateNetwork = (components, wires, pqStatus) => {
   const hvPhaseYSources = [];
   const hvPhaseBSources = [];
 
+  const hvSourceMagByNode = Object.create(null);
+  const lvSourceMagByNode = Object.create(null);
+  const genericLvSourceMagByNode = Object.create(null);
+
   // 11kV Feeder
   components.filter(c => c.type === COMPONENT_TYPES.FEEDER_11KV && c.properties.enabled).forEach(s => {
       console.log('[EVAL NETWORK] 11kV Feeder found:', s.id);
+      const feederVLL = Number(s.properties.voltage || 11000);
+      const feederVLN = feederVLL / Math.sqrt(3);
       if (statusR) {
-          hvPhaseRSources.push(`${s.id}:R`);
+          const src = `${s.id}:R`;
+          hvPhaseRSources.push(src);
+          hvSourceMagByNode[src] = feederVLN * (gridMultiplier.R ?? 1);
           console.log('[EVAL NETWORK]   R phase ENABLED - adding source');
       } else {
           console.log('[EVAL NETWORK]   R phase DISABLED - NOT adding source');
       }
       if (statusY) {
-          hvPhaseYSources.push(`${s.id}:Y`);
+          const src = `${s.id}:Y`;
+          hvPhaseYSources.push(src);
+          hvSourceMagByNode[src] = feederVLN * (gridMultiplier.Y ?? 1);
           console.log('[EVAL NETWORK]   Y phase ENABLED - adding source');
       } else {
           console.log('[EVAL NETWORK]   Y phase DISABLED - NOT adding source');
       }
       if (statusB) {
-          hvPhaseBSources.push(`${s.id}:B`);
+          const src = `${s.id}:B`;
+          hvPhaseBSources.push(src);
+          hvSourceMagByNode[src] = feederVLN * (gridMultiplier.B ?? 1);
           console.log('[EVAL NETWORK]   B phase ENABLED - adding source');
       } else {
           console.log('[EVAL NETWORK]   B phase DISABLED - NOT adding source');
@@ -202,16 +241,32 @@ export const evaluateNetwork = (components, wires, pqStatus) => {
 
   // Single Phase Supplies (Treat as Phase R)
   components.filter(c => c.type === COMPONENT_TYPES.SUPPLY && c.properties.enabled).forEach(s => {
-      if (statusR) genericPhaseSources.push(`${s.id}:L`);
+      if (statusR) {
+        const src = `${s.id}:L`;
+        genericPhaseSources.push(src);
+        genericLvSourceMagByNode[src] = gridLvPhaseVoltagesLN.R;
+      }
       neutralSources.push(`${s.id}:N`);
       earthSources.push(`${s.id}:E`);
   });
 
   // 3-Phase Supplies
   components.filter(c => c.type === COMPONENT_TYPES.SUPPLY_3P && c.properties.enabled).forEach(s => {
-      if (statusR) phaseRSources.push(`${s.id}:R`);
-      if (statusY) phaseYSources.push(`${s.id}:Y`);
-      if (statusB) phaseBSources.push(`${s.id}:B`);
+      if (statusR) {
+        const src = `${s.id}:R`;
+        phaseRSources.push(src);
+        lvSourceMagByNode[src] = gridLvPhaseVoltagesLN.R;
+      }
+      if (statusY) {
+        const src = `${s.id}:Y`;
+        phaseYSources.push(src);
+        lvSourceMagByNode[src] = gridLvPhaseVoltagesLN.Y;
+      }
+      if (statusB) {
+        const src = `${s.id}:B`;
+        phaseBSources.push(src);
+        lvSourceMagByNode[src] = gridLvPhaseVoltagesLN.B;
+      }
       neutralSources.push(`${s.id}:N`);
       earthSources.push(`${s.id}:E`);
   });
@@ -223,7 +278,10 @@ export const evaluateNetwork = (components, wires, pqStatus) => {
       c.properties.socWh > 0 &&
       !c.properties.isBypassMode
   ).forEach(inv => {
-      genericPhaseSources.push(`${inv.id}:AC_OUT_L`);
+      const src = `${inv.id}:AC_OUT_L`;
+      genericPhaseSources.push(src);
+      // Inverter output is modeled as "regulated"/stable for now (not affected by grid PQ)
+      genericLvSourceMagByNode[src] = lvBaseVoltageLN;
       neutralSources.push(`${inv.id}:AC_OUT_N`);
   });
 
@@ -243,10 +301,32 @@ export const evaluateNetwork = (components, wires, pqStatus) => {
     }
   };
 
+  const propagateWithVoltage = (sources, sourceMagByNode, phase, system, graph, resultSet) => {
+    const queue = [];
+    sources.forEach(s => {
+      const mag = Number(sourceMagByNode[s] ?? 0);
+      if (mag > 0) queue.push({ node: s, mag });
+    });
+    const best = new Map();
+    while (queue.length > 0) {
+      const { node, mag } = queue.shift();
+      const prev = best.get(node);
+      if (prev != null && prev >= mag) continue;
+      best.set(node, mag);
+      resultSet.add(node);
+      upsertTerminalPhasor(node, system, phase, mag);
+      const neighbors = graph.get(node) || [];
+      neighbors.forEach(next => {
+        const prevNext = best.get(next);
+        if (prevNext == null || prevNext < mag) queue.push({ node: next, mag });
+      });
+    }
+  };
+
   // 4. Propagate HV Sources
-  propagate(hvPhaseRSources, conductorGraph, hvPhaseRSet);
-  propagate(hvPhaseYSources, conductorGraph, hvPhaseYSet);
-  propagate(hvPhaseBSources, conductorGraph, hvPhaseBSet);
+  propagateWithVoltage(hvPhaseRSources, hvSourceMagByNode, 'R', 'HV', conductorGraph, hvPhaseRSet);
+  propagateWithVoltage(hvPhaseYSources, hvSourceMagByNode, 'Y', 'HV', conductorGraph, hvPhaseYSet);
+  propagateWithVoltage(hvPhaseBSources, hvSourceMagByNode, 'B', 'HV', conductorGraph, hvPhaseBSet);
 
   // 5. Handle Transformers (HV -> LV)
   // Check if Primaries are energized by HV sets
@@ -258,26 +338,46 @@ export const evaluateNetwork = (components, wires, pqStatus) => {
       const txBSources = [];
       const txNSources = [];
 
-      transformers.forEach(tx => {
-          // Check Primary Energization via HV sets (Per-phase independent operation)
-          // Each phase operates independently - partial phase loss is realistic in 3-phase systems
-          const hasR = hvPhaseRSet.has(`${tx.id}:PRI_R`);
-          const hasY = hvPhaseYSet.has(`${tx.id}:PRI_Y`);
-          const hasB = hvPhaseBSet.has(`${tx.id}:PRI_B`);
+       transformers.forEach(tx => {
+           // Check Primary Energization via HV sets (Per-phase independent operation)
+           // Each phase operates independently - partial phase loss is realistic in 3-phase systems
+           const priR = `${tx.id}:PRI_R`;
+           const priY = `${tx.id}:PRI_Y`;
+           const priB = `${tx.id}:PRI_B`;
 
-          // Energize each secondary phase independently based on its primary
-          if (hasR) {
-              txRSources.push(`${tx.id}:SEC_R`);
-          }
-          if (hasY) {
-              txYSources.push(`${tx.id}:SEC_Y`);
-          }
-          if (hasB) {
-              txBSources.push(`${tx.id}:SEC_B`);
-          }
+           const hasR = hvPhaseRSet.has(priR);
+           const hasY = hvPhaseYSet.has(priY);
+           const hasB = hvPhaseBSet.has(priB);
 
-          // Neutral available if at least one phase is present (star connection)
-          if ((hasR || hasY || hasB) && tx.properties.connection && tx.properties.connection.endsWith('STAR')) {
+           const ratio = (() => {
+             const hvNom = Number(tx.properties.primaryVoltage || 11000);
+             const lvNom = Number(tx.properties.secondaryVoltage || 415);
+             if (!Number.isFinite(hvNom) || hvNom <= 0) return 0;
+             return lvNom / hvNom;
+           })();
+
+           // Energize each secondary phase independently based on its primary
+           if (hasR) {
+               const sec = `${tx.id}:SEC_R`;
+               txRSources.push(sec);
+               const vPri = Number(terminalVoltageLN[priR] ?? 0);
+               lvSourceMagByNode[sec] = vPri * ratio;
+           }
+           if (hasY) {
+               const sec = `${tx.id}:SEC_Y`;
+               txYSources.push(sec);
+               const vPri = Number(terminalVoltageLN[priY] ?? 0);
+               lvSourceMagByNode[sec] = vPri * ratio;
+           }
+           if (hasB) {
+               const sec = `${tx.id}:SEC_B`;
+               txBSources.push(sec);
+               const vPri = Number(terminalVoltageLN[priB] ?? 0);
+               lvSourceMagByNode[sec] = vPri * ratio;
+           }
+
+           // Neutral available if at least one phase is present (star connection)
+           if ((hasR || hasY || hasB) && tx.properties.connection && tx.properties.connection.endsWith('STAR')) {
               txNSources.push(`${tx.id}:SEC_N`);
           }
       });
@@ -290,10 +390,10 @@ export const evaluateNetwork = (components, wires, pqStatus) => {
   }
 
   // 6. Propagate LV Sources
-  propagate(phaseRSources, conductorGraph, phaseRSet);
-  propagate(phaseYSources, conductorGraph, phaseYSet);
-  propagate(phaseBSources, conductorGraph, phaseBSet);
-  propagate(genericPhaseSources, conductorGraph, livePhaseSet);
+  propagateWithVoltage(phaseRSources, lvSourceMagByNode, 'R', 'LV', conductorGraph, phaseRSet);
+  propagateWithVoltage(phaseYSources, lvSourceMagByNode, 'Y', 'LV', conductorGraph, phaseYSet);
+  propagateWithVoltage(phaseBSources, lvSourceMagByNode, 'B', 'LV', conductorGraph, phaseBSet);
+  propagateWithVoltage(genericPhaseSources, genericLvSourceMagByNode, 'R', 'LV', conductorGraph, livePhaseSet);
   propagate(neutralSources, neutralGraph, neutralSet);
   propagate(earthSources, earthGraph, earthSet);
 
@@ -406,6 +506,18 @@ export const evaluateNetwork = (components, wires, pqStatus) => {
     }
   });
 
+  // Ensure neutral/earth are always 0V for measurement
+  neutralSet.forEach(t => {
+    terminalVoltageLN[t] = 0;
+    terminalMeta[t] = { system: 'LV', phase: null };
+    terminalPhasors[t] = phasorZero();
+  });
+  earthSet.forEach(t => {
+    terminalVoltageLN[t] = 0;
+    terminalMeta[t] = { system: 'LV', phase: null };
+    terminalPhasors[t] = phasorZero();
+  });
+
   return { 
     livePhaseSet, 
     neutralSet, 
@@ -418,6 +530,14 @@ export const evaluateNetwork = (components, wires, pqStatus) => {
     phaseBSet,
     hvPhaseRSet,
     hvPhaseYSet,
-    hvPhaseBSet
+    hvPhaseBSet,
+    terminalVoltageLN,
+    terminalPhasors,
+    terminalMeta,
+    voltageModel: {
+      lvBaseVoltageLN,
+      gridMultiplier,
+      gridLvPhaseVoltagesLN,
+    }
   };
 };

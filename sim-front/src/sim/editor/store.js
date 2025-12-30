@@ -73,7 +73,11 @@ export const useEditorStore = create(
               console.log('[DEBUG] setPQConfig called');
               console.log('[DEBUG] Update:', configUpdate);
               console.log('[DEBUG] New pqConfig:', newConfig);
-              return { pqConfig: newConfig };
+              const nextState = { pqConfig: newConfig };
+              if (configUpdate.baseVoltage != null) {
+                  nextState.mainsVoltage = Number(configUpdate.baseVoltage);
+              }
+              return nextState;
           });
       },
 
@@ -111,7 +115,9 @@ export const useEditorStore = create(
                   // Calculate Voltage
                   const getPhasor = (compId, termId) => {
                       const id = `${compId}:${termId}`;
-                      const { livePhaseSet, neutralSet, earthSet, phaseRSet, phaseYSet, phaseBSet, hvPhaseRSet, hvPhaseYSet, hvPhaseBSet } = simulationState;
+                      const { terminalPhasors, livePhaseSet, neutralSet, earthSet, phaseRSet, phaseYSet, phaseBSet, hvPhaseRSet, hvPhaseYSet, hvPhaseBSet } = simulationState;
+
+                      if (terminalPhasors && terminalPhasors[id]) return terminalPhasors[id];
                       
                       if (neutralSet.has(id) || earthSet.has(id)) return { re: 0, im: 0 };
                       
@@ -418,7 +424,8 @@ export const useEditorStore = create(
       },
 
       setMainsVoltage: (v) => {
-          set({ mainsVoltage: Number(v) });
+          const vv = Number(v);
+          set(state => ({ mainsVoltage: vv, pqConfig: { ...state.pqConfig, baseVoltage: vv } }));
           get()._evaluate();
       },
 
@@ -650,13 +657,23 @@ export const useEditorStore = create(
         console.log('[DEBUG] PQ Enabled:', pqConfig?.enabled);
         console.log('[DEBUG] Phase Status:', phaseStatus);
 
-        let simState = evaluateNetwork(components, wires, phaseStatus);
+        const NOMINAL_LV_VOLTAGE_LN = 230;
+        const lvBaseVoltageLN = NOMINAL_LV_VOLTAGE_LN;
+
+        const actualVoltages = (pqConfig?.enabled && pqState?.voltages)
+            ? pqState.voltages
+            : { R: Number(mainsVoltage ?? 230), Y: Number(mainsVoltage ?? 230), B: Number(mainsVoltage ?? 230) };
+
+        const gridMultiplier = {
+            R: lvBaseVoltageLN > 0 ? (Number(actualVoltages.R || 0) / lvBaseVoltageLN) : 1,
+            Y: lvBaseVoltageLN > 0 ? (Number(actualVoltages.Y || 0) / lvBaseVoltageLN) : 1,
+            B: lvBaseVoltageLN > 0 ? (Number(actualVoltages.B || 0) / lvBaseVoltageLN) : 1,
+        };
+
+        let simState = evaluateNetwork(components, wires, phaseStatus, { lvBaseVoltageLN, gridMultiplier });
         
         // 2. Compute Loads
-        // Pass PQ Voltages if enabled, else legacy scalar mainsVoltage
-        const voltages = (pqConfig?.enabled && pqState?.voltages) ? pqState.voltages : mainsVoltage;
-        
-        const loadRes = evaluateLoads(components, wires, simState, voltages);
+        const loadRes = evaluateLoads(components, wires, simState, { terminalVoltageLN: simState.terminalVoltageLN, legacyVoltages: actualVoltages });
         simState.loadData = loadRes.loadData;
         simState.deviceLoads = loadRes.deviceLoads;
         simState.totalSystemPowerW = loadRes.totalSystemPowerW;
@@ -693,18 +710,17 @@ export const useEditorStore = create(
             networkChanged = true;
         }
 
-        if (networkChanged) {
-            set({ components }); // Update store with tripped/auto-updated components
-            
-            // Re-evaluate network since topology/properties changed
-            simState = evaluateNetwork(components, wires, pqState?.phaseStatus);
-            const voltages = pqState?.voltages || mainsVoltage;
-            const loadRes2 = evaluateLoads(components, wires, simState, voltages);
-            simState.loadData = loadRes2.loadData;
-            simState.deviceLoads = loadRes2.deviceLoads;
-            simState.totalSystemPowerW = loadRes2.totalSystemPowerW;
-            simState.phaseCurrents = loadRes2.phaseCurrents;
-        }
+         if (networkChanged) {
+             set({ components }); // Update store with tripped/auto-updated components
+             
+             // Re-evaluate network since topology/properties changed
+             simState = evaluateNetwork(components, wires, phaseStatus, { lvBaseVoltageLN, gridMultiplier });
+             const loadRes2 = evaluateLoads(components, wires, simState, { terminalVoltageLN: simState.terminalVoltageLN, legacyVoltages: actualVoltages });
+             simState.loadData = loadRes2.loadData;
+             simState.deviceLoads = loadRes2.deviceLoads;
+             simState.totalSystemPowerW = loadRes2.totalSystemPowerW;
+             simState.phaseCurrents = loadRes2.phaseCurrents;
+         }
 
         let lessonStatus = { passed: false, checklist: [] };
         if (mode === 'GUIDED') {
