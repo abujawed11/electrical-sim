@@ -49,11 +49,9 @@ export const WiresLayer = () => {
           else if (fromType === 'SUPPLY' || fromType === 'SUPPLY_3P') targetId = 'TOTAL_MAINS';
           
           if (targetId) {
-              measureCurrent(targetId);
+              measureCurrent(targetId, wire);
           } else {
-              // No tracked device found (e.g. JB to JB without load context directly)
-              // For MVP, show 0 or user must click closer to device
-              measureCurrent(null); 
+              measureCurrent(null, wire); 
           }
           return;
       }

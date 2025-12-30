@@ -67,6 +67,11 @@ export const evaluateLoads = (components, wires, simulationState, mainsVoltage) 
           addInternal(phaseGraph, c.id, 'OUT_Y', 'IN_Y');
           addInternal(phaseGraph, c.id, 'OUT_B', 'IN_B');
       }
+      else if (c.type === COMPONENT_TYPES.ISOLATOR_3P && c.properties.isOn) {
+          addInternal(phaseGraph, c.id, 'OUT_R', 'IN_R');
+          addInternal(phaseGraph, c.id, 'OUT_Y', 'IN_Y');
+          addInternal(phaseGraph, c.id, 'OUT_B', 'IN_B');
+      }
       else if ([COMPONENT_TYPES.BUSBAR_R, COMPONENT_TYPES.BUSBAR_Y, COMPONENT_TYPES.BUSBAR_B].includes(c.type)) {
           const terms = PART_REGISTRY[c.type].terminals;
           for (let i = 0; i < terms.length - 1; i++) {
@@ -234,8 +239,14 @@ function findUpstreamBreakers(startNode, graph, components) {
         const comp = components.find(c => c.id === compId);
 
         if (comp) {
-            if ((comp.type === COMPONENT_TYPES.MCB || comp.type === COMPONENT_TYPES.RCCB || comp.type === COMPONENT_TYPES.RCBO) 
+            // Single-phase breakers
+            if ((comp.type === COMPONENT_TYPES.MCB || comp.type === COMPONENT_TYPES.RCCB || comp.type === COMPONENT_TYPES.RCBO)
                 && (termId === 'LOUT' || termId === 'L_OUT')) {
+                breakers.add(comp.id);
+            }
+            // Three-phase breakers
+            if (comp.type === COMPONENT_TYPES.MCB_3P
+                && (termId === 'OUT_R' || termId === 'OUT_Y' || termId === 'OUT_B')) {
                 breakers.add(comp.id);
             }
         }

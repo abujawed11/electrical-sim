@@ -123,27 +123,263 @@ export const useEditorStore = create(
           }
       },
 
-      measureCurrent: (compId) => {
-          const { simulationState } = get();
-          const load = simulationState.deviceLoads?.[compId];
-          // If the component has calculated load (Source, Load, or Breaker)
-          if (load) {
-              set({ 
-                  measurementResult: { 
-                      type: 'AMP', 
-                      val: load.currentA.toFixed(2), 
-                      unit: 'A' 
-                  } 
-              });
-          } else {
-               set({ 
-                  measurementResult: { 
-                      type: 'AMP', 
-                      val: '0.00', 
-                      unit: 'A' 
-                  } 
-              });
+      measureCurrent: (compId, wire) => {
+          const { simulationState, components, wires } = get();
+          let currentA = 0;
+
+          // Check if this is an earth wire - earth should show 0A in normal operation
+          if (wire) {
+              const fromComp = components.find(c => c.id === wire.from.compId);
+              const fromRegistry = PART_REGISTRY[fromComp?.type];
+              const fromTerm = fromRegistry?.terminals.find(t => t.id === wire.from.terminalId);
+
+              if (fromTerm?.kind === 'EARTH') {
+                  // Earth wires should not carry current in normal operation
+                  set({
+                      measurementResult: {
+                          type: 'AMP',
+                          val: '0.00',
+                          unit: 'A'
+                      }
+                  });
+                  return;
+              }
           }
+
+          // 1. Direct Component Lookup (Fast Path)
+          if (compId && simulationState.deviceLoads?.[compId]) {
+              currentA = simulationState.deviceLoads[compId].currentA;
+          }
+          // 2. Intermediate Wire Tracing (Graph Path)
+          else if (wire) {
+              // Determine the phase of the measurement wire
+              const fromComp = components.find(c => c.id === wire.from.compId);
+              const fromRegistry = PART_REGISTRY[fromComp?.type];
+              const fromTerm = fromRegistry?.terminals.find(t => t.id === wire.from.terminalId);
+              const measuredPhase = fromTerm?.kind; // PHASE_R, PHASE_Y, PHASE_B, PHASE, NEUTRAL, etc.
+
+              // Helper: Check if a node is electrically compatible with the measured phase
+              const isPhaseCompatible = (nodeId, targetPhase) => {
+                  const [compId, termId] = nodeId.split(':');
+                  const comp = components.find(c => c.id === compId);
+                  const registry = PART_REGISTRY[comp?.type];
+                  const term = registry?.terminals.find(t => t.id === termId);
+
+                  if (!term) return false;
+
+                  // Neutral and Earth are universal - can connect to any phase for return path
+                  if (term.kind === 'NEUTRAL' || term.kind === 'EARTH') return true;
+
+                  // Generic terminals can connect to anything
+                  if (term.kind === 'GENERIC' || targetPhase === 'GENERIC') return true;
+
+                  // For single-phase 'PHASE' kind, it's compatible with phase-specific R/Y/B
+                  if (targetPhase === 'PHASE' && (term.kind === 'PHASE_R' || term.kind === 'PHASE_Y' || term.kind === 'PHASE_B')) return true;
+                  if (term.kind === 'PHASE' && (targetPhase === 'PHASE_R' || targetPhase === 'PHASE_Y' || targetPhase === 'PHASE_B')) return true;
+
+                  // Otherwise must match exactly
+                  return term.kind === targetPhase;
+              };
+
+              // Build lightweight graph
+              const graph = new Map();
+              const addEdge = (u, v) => {
+                  if (!graph.has(u)) graph.set(u, []);
+                  if (!graph.has(v)) graph.set(v, []);
+                  graph.get(u).push(v);
+                  graph.get(v).push(u);
+              };
+
+              // Add Wires (excluding the clicked wire = CUT)
+              wires.forEach(w => {
+                  if (w.id === wire.id) return;
+                  addEdge(`${w.from.compId}:${w.from.terminalId}`, `${w.to.compId}:${w.to.terminalId}`);
+              });
+
+              // Add Internal Connections (matching evaluateLoads logic)
+              components.forEach(c => {
+                  const isClosed = (c.properties.isOn && !c.properties.isTripped);
+                  const type = c.type;
+
+                  if (type === 'MCB' && isClosed) {
+                      addEdge(`${c.id}:LIN`, `${c.id}:LOUT`);
+                  }
+                  else if (type === 'SWITCH' && c.properties.isOn) {
+                      addEdge(`${c.id}:IN_L`, `${c.id}:OUT_L`);
+                  }
+                  else if (type === 'RCCB' || type === 'RCBO') {
+                      if (isClosed) {
+                          addEdge(`${c.id}:L_IN`, `${c.id}:L_OUT`);
+                          addEdge(`${c.id}:N_IN`, `${c.id}:N_OUT`);
+                      }
+                  }
+                  else if (type === 'METER') {
+                      addEdge(`${c.id}:IN_L`, `${c.id}:OUT_L`);
+                      addEdge(`${c.id}:IN_N`, `${c.id}:OUT_N`);
+                  }
+                  else if (type === 'INVERTER' && c.properties.enabled && c.properties.isBypassMode) {
+                      addEdge(`${c.id}:AC_IN_L`, `${c.id}:AC_OUT_L`);
+                  }
+                  else if (type === 'CHANGEOVER') {
+                      if (c.properties.position === 'MAINS') {
+                          addEdge(`${c.id}:A_L`, `${c.id}:OUT_L`);
+                      } else if (c.properties.position === 'INVERTER') {
+                          addEdge(`${c.id}:B_L`, `${c.id}:OUT_L`);
+                      }
+                  }
+                  else if (type === 'MCB_3P' && isClosed) {
+                      addEdge(`${c.id}:IN_R`, `${c.id}:OUT_R`);
+                      addEdge(`${c.id}:IN_Y`, `${c.id}:OUT_Y`);
+                      addEdge(`${c.id}:IN_B`, `${c.id}:OUT_B`);
+                  }
+                  else if (type === 'METER_3P') {
+                      addEdge(`${c.id}:IN_R`, `${c.id}:OUT_R`);
+                      addEdge(`${c.id}:IN_Y`, `${c.id}:OUT_Y`);
+                      addEdge(`${c.id}:IN_B`, `${c.id}:OUT_B`);
+                  }
+                  else if (type === 'ISOLATOR_3P' && c.properties.isOn) {
+                      addEdge(`${c.id}:IN_R`, `${c.id}:OUT_R`);
+                      addEdge(`${c.id}:IN_Y`, `${c.id}:OUT_Y`);
+                      addEdge(`${c.id}:IN_B`, `${c.id}:OUT_B`);
+                  }
+                  else if (type === 'BUSBAR') {
+                      // BUSBAR uses 'IN' as hub
+                      const def = PART_REGISTRY[type];
+                      if (def) {
+                          const hubTerminal = 'IN';
+                          def.terminals.forEach(t => {
+                              if (t.id !== hubTerminal) {
+                                  addEdge(`${c.id}:${hubTerminal}`, `${c.id}:${t.id}`);
+                              }
+                          });
+                      }
+                  }
+                  else if (type === 'BUSBAR_R' || type === 'BUSBAR_Y' || type === 'BUSBAR_B') {
+                      // Chain all terminals together
+                      const def = PART_REGISTRY[type];
+                      if (def) {
+                          for(let i=0; i<def.terminals.length-1; i++) {
+                              addEdge(`${c.id}:${def.terminals[i].id}`, `${c.id}:${def.terminals[i+1].id}`);
+                          }
+                      }
+                  }
+                  else if (type === 'NEUTRAL_BAR' || type === 'EARTH_BAR') {
+                      // Connect all terminals to the first one (Hub)
+                      const def = PART_REGISTRY[type];
+                      if (def) {
+                          const t0 = def.terminals[0].id;
+                          for(let i=1; i<def.terminals.length; i++) {
+                              addEdge(`${c.id}:${t0}`, `${c.id}:${def.terminals[i].id}`);
+                          }
+                      }
+                  }
+                  else if (type === 'JUNCTION_BOX') {
+                      const def = PART_REGISTRY[type];
+                      if (def) {
+                          for(let i=0; i<def.terminals.length-1; i++) {
+                              addEdge(`${c.id}:${def.terminals[i].id}`, `${c.id}:${def.terminals[i+1].id}`);
+                          }
+                      }
+                  }
+              });
+
+              // BFS to find Source (phase-aware)
+              const hasSource = (startNode) => {
+                  const q = [startNode];
+                  const visited = new Set([startNode]);
+                  while(q.length) {
+                      const curr = q.shift();
+                      const [cId] = curr.split(':');
+                      const comp = components.find(c => c.id === cId);
+                      // Check for Active Source
+                      if (comp) {
+                          if (comp.type === 'SUPPLY' && comp.properties.enabled) return true;
+                          if (comp.type === 'SUPPLY_3P' && comp.properties.enabled) return true;
+                          if (comp.type === 'FEEDER_11KV' && comp.properties.enabled) return true;
+                          if (comp.type === 'INVERTER' && comp.properties.enabled && !comp.properties.isBypassMode && comp.properties.socWh > 0) return true;
+                          // Transformer Secondary acts as Source for LV side
+                          if (comp.type === 'TRANSFORMER_3P') {
+                              // If current node is on Secondary side, consider it a source (simplified)
+                              if (curr.includes('SEC')) return true;
+                          }
+                      }
+                      // Only traverse to phase-compatible neighbors
+                      for(const n of (graph.get(curr)||[])) {
+                          if(!visited.has(n) && isPhaseCompatible(n, measuredPhase)) {
+                              visited.add(n);
+                              q.push(n);
+                          }
+                      }
+                  }
+                  return false;
+              };
+
+              const u = `${wire.from.compId}:${wire.from.terminalId}`;
+              const v = `${wire.to.compId}:${wire.to.terminalId}`;
+
+              const uHasSource = hasSource(u);
+              const vHasSource = hasSource(v);
+
+              let downstreamNode = null;
+              // If only one side has source, the other is downstream
+              if (uHasSource && !vHasSource) downstreamNode = v;
+              else if (vHasSource && !uHasSource) downstreamNode = u;
+              
+              // If both have source (Loop), or neither (Floating), result is ambiguous.
+              // For Radial circuits, this covers 99% of cases.
+              
+              if (downstreamNode) {
+                  let I_real_sum = 0;
+                  let I_imag_sum = 0;
+                  const q = [downstreamNode];
+                  const visited = new Set([downstreamNode]);
+                  const countedLoads = new Set(); // Ensure we don't double count polyphase loads
+
+                  while(q.length) {
+                      const curr = q.shift();
+                      const [cId] = curr.split(':');
+
+                      const loadData = simulationState.loadData?.[cId];
+                      if (loadData && !countedLoads.has(cId)) {
+                          // For 3-phase loads, the stored I_real/I_imag is the total (sum of all 3 phases)
+                          // When measuring a single phase wire, we need per-phase current
+                          const comp = components.find(c => c.id === cId);
+                          const is3PhaseLoad = comp?.type === 'LOAD_3P_BALANCED';
+
+                          let I_real_contribution = loadData.I_real || 0;
+                          let I_imag_contribution = loadData.I_imag || 0;
+
+                          if (is3PhaseLoad) {
+                              // Divide by 3 to get per-phase current for balanced 3-phase loads
+                              I_real_contribution /= 3;
+                              I_imag_contribution /= 3;
+                          }
+
+                          I_real_sum += I_real_contribution;
+                          I_imag_sum += I_imag_contribution;
+                          countedLoads.add(cId);
+                      }
+
+                      // CRITICAL FIX: Only traverse to phase-compatible neighbors
+                      // This prevents counting loads on different phases
+                      for(const n of (graph.get(curr)||[])) {
+                          if(!visited.has(n) && isPhaseCompatible(n, measuredPhase)) {
+                              visited.add(n);
+                              q.push(n);
+                          }
+                      }
+                  }
+                  currentA = Math.sqrt(I_real_sum**2 + I_imag_sum**2);
+              }
+          }
+
+          set({ 
+              measurementResult: { 
+                  type: 'AMP', 
+                  val: currentA.toFixed(2), 
+                  unit: 'A' 
+              } 
+          });
       },
 
       resetTool: () => {
