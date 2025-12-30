@@ -7,16 +7,13 @@ export const PowerQualityPanel = () => {
   const pqConfig = useEditorStore(state => state.pqConfig);
   const pqState = useEditorStore(state => state.pqState);
   const setPQConfig = useEditorStore(state => state.setPQConfig);
-  const setPhaseStatus = useEditorStore(state => state.setPhaseStatus);
+  
+  const sunIntensity = useEditorStore(state => state.sunIntensity);
+  const setSunIntensity = useEditorStore(state => state.setSunIntensity);
 
   if (!pqConfig) return null; // Safety
 
   const toggleEnabled = () => setPQConfig({ enabled: !pqConfig.enabled });
-
-  // Manual phase control handlers
-  const togglePhase = (phase) => {
-      setPhaseStatus(phase, !pqState.phaseStatus[phase]);
-  };
 
   return (
     <div className="bg-gray-800 rounded border border-gray-600 shadow-lg pointer-events-auto flex flex-col w-64 transition-all">
@@ -27,7 +24,7 @@ export const PowerQualityPanel = () => {
       >
         <div className="flex items-center gap-2">
            <div className={`w-3 h-3 rounded-full ${pqConfig.enabled ? 'bg-green-500 shadow-[0_0_8px_rgba(34,197,94,0.6)]' : 'bg-gray-500'}`} />
-           <span className="text-xs font-bold text-gray-200">Power Quality</span>
+           <span className="text-xs font-bold text-gray-200">Power & Environment</span>
         </div>
         <div className="text-[10px] text-gray-400">
              {expanded ? '▼' : '▶'}
@@ -38,9 +35,31 @@ export const PowerQualityPanel = () => {
       {expanded && (
         <div className="p-3 border-t border-gray-600 space-y-3 bg-gray-900/50">
            
+           {/* Sun Intensity Slider */}
+           <div className="space-y-1 pb-2 border-b border-gray-700">
+               <div className="flex justify-between items-center text-[10px] text-gray-400">
+                   <div className="flex items-center gap-1">
+                       <span>☀️ Sunlight Intensity</span>
+                   </div>
+                   <span className="font-mono text-yellow-400">{Math.round(sunIntensity * 100)}%</span>
+               </div>
+               <input 
+                   type="range" 
+                   min="0" max="1" step="0.05"
+                   value={sunIntensity}
+                   onChange={(e) => setSunIntensity(Number(e.target.value))}
+                   className="w-full h-1.5 bg-gray-700 rounded-lg appearance-none cursor-pointer accent-yellow-500"
+               />
+               <div className="flex justify-between text-[8px] text-gray-500 uppercase font-bold px-0.5">
+                   <span>Night</span>
+                   <span>Cloudy</span>
+                   <span>Clear</span>
+               </div>
+           </div>
+
            {/* Master Switch */}
            <div className="flex items-center justify-between">
-              <span className="text-xs text-gray-300">Simulation Enabled</span>
+              <span className="text-xs text-gray-300">PQ Simulation</span>
               <button 
                  onClick={toggleEnabled}
                  className={`w-10 h-5 rounded-full relative transition-colors ${pqConfig.enabled ? 'bg-green-600' : 'bg-gray-600'}`}

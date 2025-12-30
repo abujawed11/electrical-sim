@@ -39,6 +39,9 @@ export const useEditorStore = create(
       
       mainsVoltage: 230,
 
+      // Environment
+      sunIntensity: 1.0, // 0.0 to 1.0
+
       // Power Quality State
       pqConfig: DEFAULT_PQ_CONFIG,
       pqState: DEFAULT_PQ_STATE,
@@ -427,9 +430,12 @@ export const useEditorStore = create(
       },
 
       setMainsVoltage: (v) => {
-          const vv = Number(v);
-          set(state => ({ mainsVoltage: vv, pqConfig: { ...state.pqConfig, baseVoltage: vv } }));
+          set({ mainsVoltage: Number(v) });
           get()._evaluate();
+      },
+
+      setSunIntensity: (val) => {
+          set({ sunIntensity: Number(val) });
       },
 
       // --- Simulation Control Actions ---
@@ -512,7 +518,8 @@ export const useEditorStore = create(
           const delta3PhaseKWh = (totalSystemPowerW / 1000) * dtHours;
 
           // 2. Solar & DC Logic (Replaces old Inverter Logic)
-          const solarUpdates = evaluateSolar(components, wires, simulationState.deviceLoads, dtHours, 1.0);
+          // Evaluate Solar Physics (Generation, Charging, Discharging)
+          const solarUpdates = evaluateSolar(components, wires, simulationState.deviceLoads, dtHours, get().sunIntensity);
           
           let componentsChanged = false;
           let newComponents = [...components];

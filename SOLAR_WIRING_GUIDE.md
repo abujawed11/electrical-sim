@@ -61,3 +61,29 @@ Click on any component to open the **Properties Panel**:
     *   Check if the **Solar Panel** is enabled (Click it -> Properties -> "Panel Status").
     *   Verify the polarity of your wiring (Positive to Positive, Negative to Negative).
     *   Ensure the **DC MCB** (if used) is switched **ON**.
+
+
+
+I have implemented the Sunlight Simulation.
+
+  What's New:
+
+   1. Sun Intensity Control:
+       * Added a "Sunlight Intensity" slider in the top-right panel (renamed to Power & Environment).
+       * You can slide this from 0% (Night) to 100% (Clear Sky).
+       * Generation from your Solar Panels scales realistically based on this value.
+
+   2. Simulation Physics:
+       * Solar Panels now generate power proportional to the Sunlight Intensity.
+       * At Night (0%), panels generate 0W, and your Inverter will rely entirely on the Battery.
+       * During Cloudy conditions, you'll see a drop in charging current.
+
+   3. UI Feedback:
+       * The Solar Controller status screen now displays the actual incoming Watts from the sun.
+       * The Solar Panel labels show their rated power, but you'll see the battery SOC increase faster or slower depending on the slider.
+
+  How to test:
+   1. Open the Power & Environment panel in the top-right.
+   2. Expand it and locate the ☀️ Sunlight Intensity slider.
+   3. Drag it to 0% and observe the Solar Controller switch to "STANDBY" and the Battery begin to drain (if a load is ON).
+   4. Drag it to 100% to see the battery charging rapidly.
