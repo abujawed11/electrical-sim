@@ -11,7 +11,7 @@ export const Meter = ({ id, type, x, y, isSelected, properties, onSelect, onDrag
   const simulationState = useEditorStore((state) => state.simulationState);
   
   // Energy Reading
-  const energyKWh = useEditorStore((state) => state.energyKWh);
+  const energyKWh = useEditorStore((state) => state.energyByMeterKWh?.[id] ?? 0);
   const cost = energyKWh * (properties.ratePerUnit || 10);
 
   return (

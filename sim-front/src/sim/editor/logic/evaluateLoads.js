@@ -268,6 +268,9 @@ export const evaluateLoads = (components, wires, simulationState, voltages) => {
               
               const breakers = findUpstreamBreakers(termL, phaseGraph, components);
               breakers.forEach(bId => addToDevice(bId));
+
+              const meters = findUpstreamMeters(termL, phaseGraph, components);
+              meters.forEach(mId => addToDevice(mId));
           }
       }
 
@@ -355,6 +358,19 @@ export const evaluateLoads = (components, wires, simulationState, voltages) => {
 
               const breakers = findUpstreamBreakers(termR, phaseGraph, components);
               breakers.forEach(bId => addToDevice(bId));
+
+              const metersR = new Set(findUpstreamMeters3P(termR, phaseGraph, components));
+              const metersY = new Set(findUpstreamMeters3P(termY, phaseGraph, components));
+              const metersB = new Set(findUpstreamMeters3P(termB, phaseGraph, components));
+
+              // Prefer meters that see all 3 phases; fall back to union if wiring is partial.
+              const common = [];
+              metersR.forEach(id => { if (metersY.has(id) && metersB.has(id)) common.push(id); });
+              const meters = common.length > 0
+                  ? common
+                  : Array.from(new Set([...metersR, ...metersY, ...metersB]));
+
+              meters.forEach(mId => addToDevice(mId));
           }
       }
   });
@@ -395,6 +411,61 @@ function findUpstreamBreakers(startNode, graph, components) {
         }
     }
     return Array.from(breakers);
+}
+
+function findUpstreamMeters(startNode, graph, components) {
+    const meters = new Set();
+    const queue = [startNode];
+    const visited = new Set();
+    visited.add(startNode);
+
+    while (queue.length > 0) {
+        const current = queue.shift();
+        const [compId, termId] = current.split(':');
+        const comp = components.find(c => c.id === compId);
+
+        if (comp?.type === COMPONENT_TYPES.METER) {
+            // Heuristic: if the load-side is connected to OUT_L, treat this meter as upstream of that load.
+            if (termId === 'OUT_L') meters.add(comp.id);
+        }
+
+        const neighbors = graph.get(current) || [];
+        for (const next of neighbors) {
+            if (!visited.has(next)) {
+                visited.add(next);
+                queue.push(next);
+            }
+        }
+    }
+
+    return Array.from(meters);
+}
+
+function findUpstreamMeters3P(startNode, graph, components) {
+    const meters = new Set();
+    const queue = [startNode];
+    const visited = new Set();
+    visited.add(startNode);
+
+    while (queue.length > 0) {
+        const current = queue.shift();
+        const [compId, termId] = current.split(':');
+        const comp = components.find(c => c.id === compId);
+
+        if (comp?.type === COMPONENT_TYPES.METER_3P) {
+            if (termId === 'OUT_R' || termId === 'OUT_Y' || termId === 'OUT_B') meters.add(comp.id);
+        }
+
+        const neighbors = graph.get(current) || [];
+        for (const next of neighbors) {
+            if (!visited.has(next)) {
+                visited.add(next);
+                queue.push(next);
+            }
+        }
+    }
+
+    return Array.from(meters);
 }
 
 function findUpstreamSources(startNode, graph, components) {

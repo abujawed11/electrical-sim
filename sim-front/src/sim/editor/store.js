@@ -48,6 +48,8 @@ export const useEditorStore = create(
       timeScale: 1, // 1x real time
       energyKWh: 0,
       energy3PhaseKWh: 0, // 3-Phase energy meter
+      energyByMeterKWh: {},
+      energyBy3PMeterKWh: {},
       lastTickMs: Date.now(),
       lastPQReevalMs: 0,
 
@@ -444,11 +446,11 @@ export const useEditorStore = create(
       },
 
       resetEnergy: () => {
-          set({ energyKWh: 0, energy3PhaseKWh: 0 });
-      },
+           set({ energyKWh: 0, energy3PhaseKWh: 0, energyByMeterKWh: {}, energyBy3PMeterKWh: {} });
+       },
 
       tickEnergy: (now) => {
-          const { simRunning, lastTickMs, timeScale, simulationState, components, pqConfig, pqState, energyKWh, energy3PhaseKWh, lastPQReevalMs } = get();
+          const { simRunning, lastTickMs, timeScale, simulationState, components, pqConfig, pqState, energyKWh, energy3PhaseKWh, lastPQReevalMs, energyByMeterKWh, energyBy3PMeterKWh } = get();
           if (!simRunning) {
               set({ lastTickMs: now });
               return;
@@ -507,14 +509,29 @@ export const useEditorStore = create(
            const totalMainsPowerW = simulationState.deviceLoads?.['TOTAL_MAINS']?.P || 0;
 
           // Energy (kWh) = Power (kW) * Time (h)
-          const deltaKWh = (totalMainsPowerW / 1000) * dtHours;
+           const deltaKWh = (totalMainsPowerW / 1000) * dtHours;
 
           // 3-Phase Energy Calculation
           const totalSystemPowerW = simulationState.totalSystemPowerW || 0;
-          const delta3PhaseKWh = (totalSystemPowerW / 1000) * dtHours;
+           const delta3PhaseKWh = (totalSystemPowerW / 1000) * dtHours;
 
-          // Inverter Logic (Drain & Overload) & Auto Changeover Timers
-          let componentsChanged = false;
+           // Per-meter energy accumulation (based on downstream power attributed in evaluateLoads)
+           const nextEnergyByMeterKWh = { ...(energyByMeterKWh || {}) };
+           const nextEnergyBy3PMeterKWh = { ...(energyBy3PMeterKWh || {}) };
+
+           components.forEach(c => {
+               if (c.type === 'METER') {
+                   const pW = Math.max(0, simulationState.deviceLoads?.[c.id]?.P || 0);
+                   nextEnergyByMeterKWh[c.id] = (nextEnergyByMeterKWh[c.id] || 0) + ((pW / 1000) * dtHours);
+               }
+               if (c.type === 'METER_3P') {
+                   const pW = Math.max(0, simulationState.deviceLoads?.[c.id]?.P || 0);
+                   nextEnergyBy3PMeterKWh[c.id] = (nextEnergyBy3PMeterKWh[c.id] || 0) + ((pW / 1000) * dtHours);
+               }
+           });
+
+           // Inverter Logic (Drain & Overload) & Auto Changeover Timers
+           let componentsChanged = false;
 
           const newComponents = components.map(c => {
              // 1. Inverter Logic
@@ -629,6 +646,8 @@ export const useEditorStore = create(
            const newState = {
                energyKWh: energyKWh + deltaKWh,
                energy3PhaseKWh: energy3PhaseKWh + delta3PhaseKWh,
+               energyByMeterKWh: nextEnergyByMeterKWh,
+               energyBy3PMeterKWh: nextEnergyBy3PMeterKWh,
                lastTickMs: now,
                pqState: newPQState
            };
@@ -1058,6 +1077,8 @@ export const useEditorStore = create(
           timeScale: state.timeScale,
           energyKWh: state.energyKWh,
           energy3PhaseKWh: state.energy3PhaseKWh,
+          energyByMeterKWh: state.energyByMeterKWh,
+          energyBy3PMeterKWh: state.energyBy3PMeterKWh,
           lastTickMs: state.lastTickMs // Persist tick so we don't jump time on refresh? Actually better to reset to Now on hydrate.
           // We'll reset lastTickMs on hydrate or init to avoid massive jumps.
       }),

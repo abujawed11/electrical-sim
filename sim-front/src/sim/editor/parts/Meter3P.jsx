@@ -11,7 +11,7 @@ export const Meter3P = ({ id, type, x, y, isSelected, properties, onSelect, onDr
   const simulationState = useEditorStore((state) => state.simulationState);
 
   // 3-Phase Energy Reading
-  const energy3PhaseKWh = useEditorStore((state) => state.energy3PhaseKWh);
+  const energy3PhaseKWh = useEditorStore((state) => state.energyBy3PMeterKWh?.[id] ?? 0);
   const cost = energy3PhaseKWh * (properties.ratePerUnit || 10);
 
   return (
