@@ -49,6 +49,7 @@ export const useEditorStore = create(
       energyKWh: 0,
       energy3PhaseKWh: 0, // 3-Phase energy meter
       lastTickMs: Date.now(),
+      lastPQReevalMs: 0,
 
       // Guided Mode State
       mode: 'SANDBOX', 
@@ -433,7 +434,8 @@ export const useEditorStore = create(
       toggleSim: () => {
           set(state => ({ 
               simRunning: !state.simRunning,
-              lastTickMs: Date.now() // Reset tick to prevent jump
+              lastTickMs: Date.now(), // Reset tick to prevent jump
+              lastPQReevalMs: 0
           }));
       },
 
@@ -446,7 +448,7 @@ export const useEditorStore = create(
       },
 
       tickEnergy: (now) => {
-          const { simRunning, lastTickMs, timeScale, simulationState, components, pqConfig, pqState, energyKWh, energy3PhaseKWh } = get();
+          const { simRunning, lastTickMs, timeScale, simulationState, components, pqConfig, pqState, energyKWh, energy3PhaseKWh, lastPQReevalMs } = get();
           if (!simRunning) {
               set({ lastTickMs: now });
               return;
@@ -488,14 +490,21 @@ export const useEditorStore = create(
               needReeval = true;
           }
 
-          // Voltage change (Brownout) -> Load Calc Change -> Re-eval
-          // Threshold to avoid re-eval on tiny noise
-          const vDiff = (p) => Math.abs(newPQState.voltages[p] - pqState.voltages[p]);
-          if (vDiff('R') > 0.5 || vDiff('Y') > 0.5 || vDiff('B') > 0.5) {
-              needReeval = true;
-          }
+           // Voltage change (Brownout) -> Load Calc Change -> Re-eval
+           // Threshold to avoid re-eval on tiny noise
+           const vDiff = (p) => Math.abs(newPQState.voltages[p] - pqState.voltages[p]);
+           if (vDiff('R') > 0.5 || vDiff('Y') > 0.5 || vDiff('B') > 0.5) {
+               needReeval = true;
+           }
 
-          const totalMainsPowerW = simulationState.deviceLoads?.['TOTAL_MAINS']?.P || 0;
+           // Keep physics + UI feeling "live": voltage changes can be small per frame due to smoothing,
+           // so also re-evaluate at a fixed cadence while PQ is enabled.
+           const PQ_REEVAL_INTERVAL_MS = 50;
+           if (pqConfig.enabled && (now - (lastPQReevalMs || 0)) >= PQ_REEVAL_INTERVAL_MS) {
+               needReeval = true;
+           }
+
+           const totalMainsPowerW = simulationState.deviceLoads?.['TOTAL_MAINS']?.P || 0;
 
           // Energy (kWh) = Power (kW) * Time (h)
           const deltaKWh = (totalMainsPowerW / 1000) * dtHours;
@@ -617,12 +626,16 @@ export const useEditorStore = create(
           });
 
           // State Update
-          const newState = {
-              energyKWh: energyKWh + deltaKWh,
-              energy3PhaseKWh: energy3PhaseKWh + delta3PhaseKWh,
-              lastTickMs: now,
-              pqState: newPQState
-          };
+           const newState = {
+               energyKWh: energyKWh + deltaKWh,
+               energy3PhaseKWh: energy3PhaseKWh + delta3PhaseKWh,
+               lastTickMs: now,
+               pqState: newPQState
+           };
+
+           if (needReeval) {
+               newState.lastPQReevalMs = now;
+           }
           
           if (componentsChanged) {
               newState.components = newComponents;
