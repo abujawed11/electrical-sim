@@ -128,6 +128,13 @@ export const evaluateNetwork = (components, wires) => {
           addEdge(conductorGraph, `${comp.id}:IN_B`, `${comp.id}:OUT_B`);
       }
     }
+    else if (comp.type === COMPONENT_TYPES.ISOLATOR_3P) {
+      if (comp.properties.isOn) {
+          addEdge(conductorGraph, `${comp.id}:IN_R`, `${comp.id}:OUT_R`);
+          addEdge(conductorGraph, `${comp.id}:IN_Y`, `${comp.id}:OUT_Y`);
+          addEdge(conductorGraph, `${comp.id}:IN_B`, `${comp.id}:OUT_B`);
+      }
+    }
     else if (comp.type === COMPONENT_TYPES.METER_3P) {
       addEdge(conductorGraph, `${comp.id}:IN_R`, `${comp.id}:OUT_R`);
       addEdge(conductorGraph, `${comp.id}:IN_Y`, `${comp.id}:OUT_Y`);

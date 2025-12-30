@@ -345,6 +345,21 @@ export const PART_DEFINITIONS = {
       { id: 'OUT_B', kind: TERMINAL_KINDS.PHASE_B, relX: 25, relY: 46, label: 'B-O' },
     ],
   },
+  [COMPONENT_TYPES.ISOLATOR_3P]: {
+    name: '3-Pole Isolator',
+    defaultProperties: {
+      label: 'ISO-1',
+      isOn: false,
+    },
+    terminals: [
+      { id: 'IN_R', kind: TERMINAL_KINDS.PHASE_R, relX: -25, relY: -40, label: 'R-I' },
+      { id: 'IN_Y', kind: TERMINAL_KINDS.PHASE_Y, relX: 0, relY: -40, label: 'Y-I' },
+      { id: 'IN_B', kind: TERMINAL_KINDS.PHASE_B, relX: 25, relY: -40, label: 'B-I' },
+      { id: 'OUT_R', kind: TERMINAL_KINDS.PHASE_R, relX: -25, relY: 40, label: 'R-O' },
+      { id: 'OUT_Y', kind: TERMINAL_KINDS.PHASE_Y, relX: 0, relY: 40, label: 'Y-O' },
+      { id: 'OUT_B', kind: TERMINAL_KINDS.PHASE_B, relX: 25, relY: 40, label: 'B-O' },
+    ],
+  },
   [COMPONENT_TYPES.BUSBAR_R]: {
     name: 'Busbar: Phase R',
     defaultProperties: { label: 'R-BUS' },
