@@ -18,7 +18,7 @@ export const WiresLayer = () => {
   const addProbePoint = useEditorStore((state) => state.addProbePoint);
 
   // Destructure sets for cleaner lookups
-  const { livePhaseSet, neutralSet, earthSet, protectedPhaseSet, protectedNeutralSet, phaseRSet, phaseYSet, phaseBSet } = simulationState;
+  const { livePhaseSet, neutralSet, earthSet, protectedPhaseSet, protectedNeutralSet, phaseRSet, phaseYSet, phaseBSet, hvPhaseRSet, hvPhaseYSet, hvPhaseBSet } = simulationState;
 
   const handleWireClick = (e, wire) => {
       e.cancelBubble = true;
@@ -126,6 +126,33 @@ export const WiresLayer = () => {
                   strokeColor = '#3B82F6'; // Bright Blue
               } else {
                   strokeColor = '#1E3A8A'; // Dark Blue (not energized)
+              }
+           } else if (term.kind === TERMINAL_KINDS.HV_PHASE_R) {
+              // HV Red Phase (11kV R)
+              const isEnergized = hvPhaseRSet && hvPhaseRSet.has(fromIdStr) && hvPhaseRSet.has(toIdStr);
+
+              if (isEnergized) {
+                  strokeColor = '#DC2626'; // Bright Red (11kV)
+              } else {
+                  strokeColor = '#7F1D1D'; // Dark Red (de-energized)
+              }
+           } else if (term.kind === TERMINAL_KINDS.HV_PHASE_Y) {
+              // HV Yellow Phase (11kV Y)
+              const isEnergized = hvPhaseYSet && hvPhaseYSet.has(fromIdStr) && hvPhaseYSet.has(toIdStr);
+
+              if (isEnergized) {
+                  strokeColor = '#F59E0B'; // Bright Amber/Yellow (11kV)
+              } else {
+                  strokeColor = '#78350F'; // Dark Amber (de-energized)
+              }
+           } else if (term.kind === TERMINAL_KINDS.HV_PHASE_B) {
+              // HV Blue Phase (11kV B)
+              const isEnergized = hvPhaseBSet && hvPhaseBSet.has(fromIdStr) && hvPhaseBSet.has(toIdStr);
+
+              if (isEnergized) {
+                  strokeColor = '#2563EB'; // Bright Blue (11kV)
+              } else {
+                  strokeColor = '#1E3A8A'; // Dark Blue (de-energized)
               }
            } else if (term.kind === TERMINAL_KINDS.PHASE) {
               const isEnergized = livePhaseSet.has(fromIdStr) && livePhaseSet.has(toIdStr);

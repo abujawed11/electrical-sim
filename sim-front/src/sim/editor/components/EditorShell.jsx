@@ -5,6 +5,7 @@ import { CanvasStage } from './CanvasStage';
 import { LessonPanel } from './LessonPanel';
 import { SimController } from './SimController';
 import { MeasurementPanel } from './MeasurementPanel';
+import { PowerQualityPanel } from './PowerQualityPanel';
 import { useEditorStore } from '../store';
 
 export const EditorShell = () => {
@@ -30,6 +31,9 @@ export const EditorShell = () => {
          {/* Top Right Controls Overlay */}
          <div className="absolute top-4 right-4 z-50 flex flex-col items-end gap-2 pointer-events-none">
              
+             {/* Power Quality Panel */}
+             <PowerQualityPanel />
+
              {/* Voltage */}
              <div className="bg-gray-800 p-2 rounded border border-gray-600 flex items-center gap-2 shadow-lg pointer-events-auto">
                 <label className="text-xs font-bold text-gray-400">Mains (V)</label>

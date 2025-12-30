@@ -7,6 +7,7 @@ import { evaluateFaults } from './logic/evaluateFaults';
 import { evaluateLoads } from './logic/evaluateLoads';
 import { evaluateAutoChangeover } from './logic/evaluateAutoChangeover';
 import { validateLesson, getLesson, ALL_LESSONS } from './lessons/lessonEngine';
+import { DEFAULT_PQ_CONFIG, DEFAULT_PQ_STATE, updatePowerQuality } from './logic/PowerQualityEngine';
 
 const DEFAULT_SIM_STATE = {
   livePhaseSet: new Set(),
@@ -20,6 +21,7 @@ const DEFAULT_SIM_STATE = {
   protectedNeutralSet: new Set(),
   loadData: {}, 
   deviceLoads: {}, 
+  phaseCurrents: { R: 0, Y: 0, B: 0 },
   totalSystemPowerW: 0,
 };
 
@@ -36,6 +38,10 @@ export const useEditorStore = create(
       messages: [], 
       
       mainsVoltage: 230,
+
+      // Power Quality State
+      pqConfig: DEFAULT_PQ_CONFIG,
+      pqState: DEFAULT_PQ_STATE,
 
       // Time & Energy Simulation State
       simRunning: true,
@@ -59,6 +65,31 @@ export const useEditorStore = create(
         scale: 1,
         x: 0,
         y: 0,
+      },
+
+      setPQConfig: (configUpdate) => {
+          set(state => {
+              const newConfig = { ...state.pqConfig, ...configUpdate };
+              console.log('[DEBUG] setPQConfig called');
+              console.log('[DEBUG] Update:', configUpdate);
+              console.log('[DEBUG] New pqConfig:', newConfig);
+              return { pqConfig: newConfig };
+          });
+      },
+
+      // Manual Phase Control (for testing/debugging)
+      setPhaseStatus: (phase, status) => {
+          const { pqState } = get();
+          const newPhaseStatus = { ...pqState.phaseStatus, [phase]: status };
+          const newPQState = { ...pqState, phaseStatus: newPhaseStatus };
+
+          console.log(`[DEBUG] Manual phase control: ${phase} = ${status}`);
+          console.log('[DEBUG] New phase status:', newPhaseStatus);
+
+          set({ pqState: newPQState });
+
+          // Force immediate re-evaluation with new state
+          get()._evaluateWithPQ(newPQState, null);
       },
 
       setActiveTool: (tool) => {
@@ -408,19 +439,54 @@ export const useEditorStore = create(
       },
 
       tickEnergy: (now) => {
-          const { simRunning, lastTickMs, timeScale, simulationState, components } = get();
+          const { simRunning, lastTickMs, timeScale, simulationState, components, pqConfig, pqState, energyKWh, energy3PhaseKWh } = get();
           if (!simRunning) {
-              // Just update lastTick to now so we don't accumulate paused time later
               set({ lastTickMs: now });
               return;
           }
 
           const dtMs = now - lastTickMs;
-          if (dtMs <= 0) return; // Should not happen but safety check
+          if (dtMs <= 0) return;
 
           const dtSec = dtMs / 1000;
           const scaledDtSec = dtSec * timeScale;
           const dtHours = scaledDtSec / 3600;
+
+          // Debug logging for PQ (only log every 5 seconds to reduce spam)
+          if (pqConfig.enabled && pqConfig.outageEnabled && now % 5000 < 200) {
+              console.log('[DEBUG TICK] Time until next outage:', Math.round((pqState.nextOutageCheck - now) / 1000), 'seconds');
+          }
+
+          // 1. Update Power Quality
+          const newPQState = updatePowerQuality(
+              pqState,
+              pqConfig,
+              scaledDtSec,
+              now,
+              simulationState.phaseCurrents || { R:0, Y:0, B:0 }
+          );
+
+          // Detect meaningful changes to trigger re-eval
+          let needReeval = false;
+
+          // Status change (Outage) -> Topology Change -> Re-eval
+          if (
+              newPQState.phaseStatus.R !== pqState.phaseStatus.R ||
+              newPQState.phaseStatus.Y !== pqState.phaseStatus.Y ||
+              newPQState.phaseStatus.B !== pqState.phaseStatus.B
+          ) {
+              console.log('[DEBUG TICK] ⚡ PHASE STATUS CHANGED - TRIGGERING RE-EVAL!');
+              console.log('[DEBUG TICK] Old:', pqState.phaseStatus);
+              console.log('[DEBUG TICK] New:', newPQState.phaseStatus);
+              needReeval = true;
+          }
+
+          // Voltage change (Brownout) -> Load Calc Change -> Re-eval
+          // Threshold to avoid re-eval on tiny noise
+          const vDiff = (p) => Math.abs(newPQState.voltages[p] - pqState.voltages[p]);
+          if (vDiff('R') > 0.5 || vDiff('Y') > 0.5 || vDiff('B') > 0.5) {
+              needReeval = true;
+          }
 
           const totalMainsPowerW = simulationState.deviceLoads?.['TOTAL_MAINS']?.P || 0;
 
@@ -428,13 +494,11 @@ export const useEditorStore = create(
           const deltaKWh = (totalMainsPowerW / 1000) * dtHours;
 
           // 3-Phase Energy Calculation
-          // Calculate total power from all loads (3-phase system includes all phases)
           const totalSystemPowerW = simulationState.totalSystemPowerW || 0;
           const delta3PhaseKWh = (totalSystemPowerW / 1000) * dtHours;
 
           // Inverter Logic (Drain & Overload) & Auto Changeover Timers
           let componentsChanged = false;
-          let needReeval = false;
 
           const newComponents = components.map(c => {
              // 1. Inverter Logic
@@ -545,37 +609,58 @@ export const useEditorStore = create(
              return c;
           });
 
+          // State Update
+          const newState = {
+              energyKWh: energyKWh + deltaKWh,
+              energy3PhaseKWh: energy3PhaseKWh + delta3PhaseKWh,
+              lastTickMs: now,
+              pqState: newPQState
+          };
+          
           if (componentsChanged) {
-              set(state => ({
-                  energyKWh: state.energyKWh + deltaKWh,
-                  energy3PhaseKWh: state.energy3PhaseKWh + delta3PhaseKWh,
-                  lastTickMs: now,
-                  components: newComponents
-              }));
-              if (needReeval) {
-                  get()._evaluate();
-              }
-          } else {
-              set(state => ({
-                  energyKWh: state.energyKWh + deltaKWh,
-                  energy3PhaseKWh: state.energy3PhaseKWh + delta3PhaseKWh,
-                  lastTickMs: now
-              }));
+              newState.components = newComponents;
+          }
+
+          set(newState);
+
+          if (needReeval) {
+              console.log('[DEBUG TICK] 🔄 Calling _evaluateWithPQ with new PQ state...');
+              // Force immediate re-evaluation with the NEW PQ state
+              // Don't rely on get() which might return stale data due to async set()
+              get()._evaluateWithPQ(newPQState, componentsChanged ? newComponents : components);
+              console.log('[DEBUG TICK] ✅ Re-evaluation complete!');
           }
       },
 
-      // --- Helper to trigger evaluation ---
-      _evaluate: () => {
-        let { components, wires, mode, activeLessonId, mainsVoltage } = get();
-        
+      // --- Helper to trigger evaluation with explicit PQ state ---
+      _evaluateWithPQ: (pqStateOverride, componentsOverride) => {
+        let { components, wires, mode, activeLessonId, mainsVoltage, pqConfig } = get();
+
+        // Use override if provided, otherwise get from store
+        const pqState = pqStateOverride || get().pqState;
+        components = componentsOverride || components;
+
         // 1. Compute Network State (Energization)
-        let simState = evaluateNetwork(components, wires);
+        // Pass PQ Status to allow/disallow sources ONLY if PQ enabled
+        // If disabled, pass null (all sources ON)
+        const phaseStatus = pqConfig?.enabled ? pqState?.phaseStatus : null;
+
+        console.log('[DEBUG] _evaluateWithPQ called');
+        console.log('[DEBUG] Full pqConfig:', pqConfig);
+        console.log('[DEBUG] PQ Enabled:', pqConfig?.enabled);
+        console.log('[DEBUG] Phase Status:', phaseStatus);
+
+        let simState = evaluateNetwork(components, wires, phaseStatus);
         
         // 2. Compute Loads
-        const loadRes = evaluateLoads(components, wires, simState, mainsVoltage);
+        // Pass PQ Voltages if enabled, else legacy scalar mainsVoltage
+        const voltages = (pqConfig?.enabled && pqState?.voltages) ? pqState.voltages : mainsVoltage;
+        
+        const loadRes = evaluateLoads(components, wires, simState, voltages);
         simState.loadData = loadRes.loadData;
         simState.deviceLoads = loadRes.deviceLoads;
         simState.totalSystemPowerW = loadRes.totalSystemPowerW;
+        simState.phaseCurrents = loadRes.phaseCurrents; // Save for next tick
 
         // 3. Check Faults & Trip Devices
         const trips = evaluateFaults(components, wires, simState);
@@ -612,11 +697,13 @@ export const useEditorStore = create(
             set({ components }); // Update store with tripped/auto-updated components
             
             // Re-evaluate network since topology/properties changed
-            simState = evaluateNetwork(components, wires);
-            const loadRes2 = evaluateLoads(components, wires, simState, mainsVoltage);
+            simState = evaluateNetwork(components, wires, pqState?.phaseStatus);
+            const voltages = pqState?.voltages || mainsVoltage;
+            const loadRes2 = evaluateLoads(components, wires, simState, voltages);
             simState.loadData = loadRes2.loadData;
             simState.deviceLoads = loadRes2.deviceLoads;
             simState.totalSystemPowerW = loadRes2.totalSystemPowerW;
+            simState.phaseCurrents = loadRes2.phaseCurrents;
         }
 
         let lessonStatus = { passed: false, checklist: [] };
@@ -625,6 +712,11 @@ export const useEditorStore = create(
         }
 
         set({ simulationState: simState, lessonStatus });
+      },
+
+      // --- Original evaluate (backward compatibility) ---
+      _evaluate: () => {
+        get()._evaluateWithPQ(null, null);
       },
 
       addMessage: (text, type = 'info') => {
@@ -932,6 +1024,7 @@ export const useEditorStore = create(
           activeLessonId: state.activeLessonId,
           stage: state.stage,
           mainsVoltage: state.mainsVoltage,
+          pqConfig: state.pqConfig, // Persist Power Quality settings
           simRunning: state.simRunning,
           timeScale: state.timeScale,
           energyKWh: state.energyKWh,

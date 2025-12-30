@@ -7,16 +7,28 @@ import { PART_DEFINITIONS as PART_REGISTRY } from '../parts/partDefinitions';
  * @param {Array} components 
  * @param {Array} wires 
  * @param {Object} simulationState { livePhaseSet, neutralSet }
- * @param {Number} mainsVoltage
- * @returns {Object} { loadData, deviceLoads, totalSystemPowerW }
+ * @param {Object|Number} voltages - { R, Y, B } or scalar (legacy)
+ * @returns {Object} { loadData, deviceLoads, totalSystemPowerW, phaseCurrents }
  */
-export const evaluateLoads = (components, wires, simulationState, mainsVoltage) => {
+export const evaluateLoads = (components, wires, simulationState, voltages) => {
   const loadData = {};
   const deviceLoads = {
       'TOTAL_MAINS': { I_real: 0, I_imag: 0, currentA: 0, P: 0, S: 0, Q: 0 },
       'TOTAL_INVERTER': { I_real: 0, I_imag: 0, currentA: 0, P: 0, S: 0, Q: 0 }
   };
   let totalSystemPowerW = 0;
+  
+  // Track total current per phase (RMS sum approx or scalar sum for worst case sag?)
+  // For voltage sag V = V0 - I*R, we usually want scalar sum of currents if PF~1, or |I_complex|.
+  // We'll track scalar RMS sum for simplicity in Sag Model.
+  const phaseCurrents = { R: 0, Y: 0, B: 0 };
+
+  // Normalize voltages
+  const V_R = (typeof voltages === 'object') ? voltages.R : voltages;
+  const V_Y = (typeof voltages === 'object') ? voltages.Y : voltages;
+  const V_B = (typeof voltages === 'object') ? voltages.B : voltages;
+  // Fallback for Generic
+  const V_Gen = V_R; 
 
   const { livePhaseSet, neutralSet, phaseRSet, phaseYSet, phaseBSet } = simulationState;
 
@@ -101,9 +113,20 @@ export const evaluateLoads = (components, wires, simulationState, mainsVoltage) 
           
           const isPowered = livePhaseSet.has(termL) && neutralSet.has(termN);
           
+          // Determine Voltage & Phase
+          let V = V_Gen;
+          let phase = 'R'; // Default to R for generic/unknown
+
+          if (phaseRSet.has(termL)) { V = V_R; phase = 'R'; }
+          else if (phaseYSet.has(termL)) { V = V_Y; phase = 'Y'; }
+          else if (phaseBSet.has(termL)) { V = V_B; phase = 'B'; }
+          
           // Calculations
+          // Avoid div/0
+          const effV = V < 1 ? 1 : V;
+          
           const S = isPowered ? P / pf : 0;
-          const I = isPowered ? S / mainsVoltage : 0;
+          const I = isPowered ? S / effV : 0;
           let Q = isPowered ? Math.sqrt(Math.max(0, S*S - P*P)) : 0;
           
           if (type === 'CAPACITIVE') Q = -Q;
@@ -111,8 +134,12 @@ export const evaluateLoads = (components, wires, simulationState, mainsVoltage) 
           // Components of Current
           // I_real = I * pf
           // I_imag = I * sin(acos(pf)) ... approx Q/V
-          const I_real = isPowered ? (P / mainsVoltage) : 0;
-          const I_imag = isPowered ? (Q / mainsVoltage) : 0;
+          const I_real = isPowered ? (P / effV) : 0;
+          const I_imag = isPowered ? (Q / effV) : 0;
+
+          if (isPowered) {
+              phaseCurrents[phase] += I;
+          }
 
           loadData[comp.id] = {
               currentA: I,
@@ -162,7 +189,14 @@ export const evaluateLoads = (components, wires, simulationState, mainsVoltage) 
       else if (comp.type === COMPONENT_TYPES.LOAD_3P_BALANCED) {
           const P_total = (comp.properties.powerKW || 0) * 1000; // Convert kW to W
           const pf = comp.properties.powerFactor || 0.85;
-          const lineVoltage = 415; // 3-phase line voltage (R-Y, Y-B, B-R)
+          
+          // Approximate Line Voltage from Phase Voltages
+          // V_L_L = V_L_N * sqrt(3)
+          // We take the average of available phases or just R for reference
+          // Ideally: sqrt(V_R^2 + V_Y^2 - 2*V_R*V_Y*cos(120)) ... 
+          // Simplification: Average Phase V * sqrt(3)
+          const avgPhaseV = (V_R + V_Y + V_B) / 3;
+          const lineVoltage = avgPhaseV * Math.sqrt(3);
 
           // Check if all 3 phases are present
           const termR = `${comp.id}:R`;
@@ -179,14 +213,23 @@ export const evaluateLoads = (components, wires, simulationState, mainsVoltage) 
           // 3-Phase Power Calculations
           // P_total = √3 × V_line × I_line × PF
           // I_line = P_total / (√3 × V_line × PF)
+          
+          const effLineV = lineVoltage < 1 ? 1 : lineVoltage;
+          
           const S_total = isPowered ? P_total / pf : 0;
-          const I_line = isPowered ? S_total / (Math.sqrt(3) * lineVoltage) : 0;
+          const I_line = isPowered ? S_total / (Math.sqrt(3) * effLineV) : 0;
           const Q_total = isPowered ? Math.sqrt(Math.max(0, S_total**2 - P_total**2)) : 0;
+
+          if (isPowered) {
+              phaseCurrents.R += I_line;
+              phaseCurrents.Y += I_line;
+              phaseCurrents.B += I_line;
+          }
 
           // Per-phase values (for balanced load)
           const P_per_phase = P_total / 3;
-          const I_real_per_phase = isPowered ? (P_per_phase / (lineVoltage / Math.sqrt(3))) : 0;
-          const I_imag_per_phase = isPowered ? (Q_total / 3 / (lineVoltage / Math.sqrt(3))) : 0;
+          const I_real_per_phase = isPowered ? (P_per_phase / (effLineV / Math.sqrt(3))) : 0;
+          const I_imag_per_phase = isPowered ? (Q_total / 3 / (effLineV / Math.sqrt(3))) : 0;
 
           loadData[comp.id] = {
               currentA: I_line,
@@ -224,7 +267,7 @@ export const evaluateLoads = (components, wires, simulationState, mainsVoltage) 
       }
   });
 
-  return { loadData, deviceLoads, totalSystemPowerW };
+  return { loadData, deviceLoads, totalSystemPowerW, phaseCurrents };
 };
 
 function findUpstreamBreakers(startNode, graph, components) {

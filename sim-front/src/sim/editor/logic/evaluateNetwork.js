@@ -7,9 +7,20 @@ import { PART_DEFINITIONS as PART_REGISTRY } from '../parts/partDefinitions';
  * 
  * @param {Array} components - List of all components in the scene
  * @param {Array} wires - List of all wires
+ * @param {Object} pqStatus - Optional { R, Y, B } boolean status
  * @returns {Object} { livePhaseSet, neutralSet, earthSet, phaseRSet, ... hvPhaseRSet ... }
  */
-export const evaluateNetwork = (components, wires) => {
+export const evaluateNetwork = (components, wires, pqStatus) => {
+  // Default to all ON if no status provided
+  const statusR = pqStatus ? pqStatus.R : true;
+  const statusY = pqStatus ? pqStatus.Y : true;
+  const statusB = pqStatus ? pqStatus.B : true;
+
+  console.log('[EVAL NETWORK] Called with pqStatus:', pqStatus);
+  console.log('[EVAL NETWORK] Phase R status:', statusR);
+  console.log('[EVAL NETWORK] Phase Y status:', statusY);
+  console.log('[EVAL NETWORK] Phase B status:', statusB);
+
   // Sets for energized terminals (LV)
   const phaseRSet = new Set();
   const phaseYSet = new Set();
@@ -167,24 +178,40 @@ export const evaluateNetwork = (components, wires) => {
 
   // 11kV Feeder
   components.filter(c => c.type === COMPONENT_TYPES.FEEDER_11KV && c.properties.enabled).forEach(s => {
-      hvPhaseRSources.push(`${s.id}:R`);
-      hvPhaseYSources.push(`${s.id}:Y`);
-      hvPhaseBSources.push(`${s.id}:B`);
+      console.log('[EVAL NETWORK] 11kV Feeder found:', s.id);
+      if (statusR) {
+          hvPhaseRSources.push(`${s.id}:R`);
+          console.log('[EVAL NETWORK]   R phase ENABLED - adding source');
+      } else {
+          console.log('[EVAL NETWORK]   R phase DISABLED - NOT adding source');
+      }
+      if (statusY) {
+          hvPhaseYSources.push(`${s.id}:Y`);
+          console.log('[EVAL NETWORK]   Y phase ENABLED - adding source');
+      } else {
+          console.log('[EVAL NETWORK]   Y phase DISABLED - NOT adding source');
+      }
+      if (statusB) {
+          hvPhaseBSources.push(`${s.id}:B`);
+          console.log('[EVAL NETWORK]   B phase ENABLED - adding source');
+      } else {
+          console.log('[EVAL NETWORK]   B phase DISABLED - NOT adding source');
+      }
       earthSources.push(`${s.id}:E`);
   });
 
-  // Single Phase Supplies
+  // Single Phase Supplies (Treat as Phase R)
   components.filter(c => c.type === COMPONENT_TYPES.SUPPLY && c.properties.enabled).forEach(s => {
-      genericPhaseSources.push(`${s.id}:L`);
+      if (statusR) genericPhaseSources.push(`${s.id}:L`);
       neutralSources.push(`${s.id}:N`);
       earthSources.push(`${s.id}:E`);
   });
 
   // 3-Phase Supplies
   components.filter(c => c.type === COMPONENT_TYPES.SUPPLY_3P && c.properties.enabled).forEach(s => {
-      phaseRSources.push(`${s.id}:R`);
-      phaseYSources.push(`${s.id}:Y`);
-      phaseBSources.push(`${s.id}:B`);
+      if (statusR) phaseRSources.push(`${s.id}:R`);
+      if (statusY) phaseYSources.push(`${s.id}:Y`);
+      if (statusB) phaseBSources.push(`${s.id}:B`);
       neutralSources.push(`${s.id}:N`);
       earthSources.push(`${s.id}:E`);
   });
@@ -232,20 +259,26 @@ export const evaluateNetwork = (components, wires) => {
       const txNSources = [];
 
       transformers.forEach(tx => {
-          // Check Primary Energization via HV sets (Strict 11kV check)
-          // Or fallback to generic live check if we want to allow LV->HV backfeed (not for now)
+          // Check Primary Energization via HV sets (Per-phase independent operation)
+          // Each phase operates independently - partial phase loss is realistic in 3-phase systems
           const hasR = hvPhaseRSet.has(`${tx.id}:PRI_R`);
           const hasY = hvPhaseYSet.has(`${tx.id}:PRI_Y`);
           const hasB = hvPhaseBSet.has(`${tx.id}:PRI_B`);
-          
-          if (hasR && hasY && hasB) {
+
+          // Energize each secondary phase independently based on its primary
+          if (hasR) {
               txRSources.push(`${tx.id}:SEC_R`);
+          }
+          if (hasY) {
               txYSources.push(`${tx.id}:SEC_Y`);
+          }
+          if (hasB) {
               txBSources.push(`${tx.id}:SEC_B`);
-              
-              if (tx.properties.connection && tx.properties.connection.endsWith('STAR')) {
-                  txNSources.push(`${tx.id}:SEC_N`);
-              }
+          }
+
+          // Neutral available if at least one phase is present (star connection)
+          if ((hasR || hasY || hasB) && tx.properties.connection && tx.properties.connection.endsWith('STAR')) {
+              txNSources.push(`${tx.id}:SEC_N`);
           }
       });
 
