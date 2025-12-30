@@ -216,7 +216,7 @@ export const PropertiesPanel = () => {
         )}
 
         {/* Specific Properties based on Type */}
-        {(isBreaker || isRCCB || selectedComponent.type === COMPONENT_TYPES.SWITCH || selectedComponent.type === COMPONENT_TYPES.MCB_3P) && (
+        {(isBreaker || isRCCB || selectedComponent.type === COMPONENT_TYPES.SWITCH || selectedComponent.type === COMPONENT_TYPES.MCB_3P || selectedComponent.type === COMPONENT_TYPES.DC_MCB) && (
            <div className="flex items-center justify-between p-2 bg-gray-700 rounded">
               <span className="text-gray-200 text-sm">Switch State</span>
               <button
@@ -312,6 +312,93 @@ export const PropertiesPanel = () => {
                         className="w-full bg-gray-900 border border-gray-600 rounded px-2 py-1 text-white"
                     />
                 </div>
+            </div>
+        )}
+
+        {/* Solar Panel Properties */}
+        {selectedComponent.type === COMPONENT_TYPES.SOLAR_PANEL && (
+            <div className="space-y-3">
+                <div className="flex items-center justify-between p-2 bg-gray-700 rounded">
+                  <span className="text-gray-200 text-sm">Panel Status</span>
+                  <button
+                    onClick={() => handlePropChange('enabled', !selectedComponent.properties.enabled)}
+                    className={`px-3 py-1 rounded text-xs font-bold ${
+                        selectedComponent.properties.enabled 
+                        ? 'bg-green-600 text-white' 
+                        : 'bg-gray-600 text-gray-300'
+                    }`}
+                  >
+                    {selectedComponent.properties.enabled ? 'ACTIVE' : 'COVERED'}
+                  </button>
+               </div>
+               <div className="space-y-1">
+                   <label className="text-xs text-gray-400 block">Rated Power (W)</label>
+                   <input type="number" min="0" value={selectedComponent.properties.powerW} onChange={(e) => handlePropChange('powerW', parseFloat(e.target.value))} className="w-full bg-gray-900 border border-gray-600 rounded px-2 py-1 text-white"/>
+               </div>
+               <div className="grid grid-cols-2 gap-2">
+                   <div className="space-y-1">
+                       <label className="text-xs text-gray-400 block">Voc (V)</label>
+                       <input type="number" min="0" value={selectedComponent.properties.voc} onChange={(e) => handlePropChange('voc', parseFloat(e.target.value))} className="w-full bg-gray-900 border border-gray-600 rounded px-2 py-1 text-white"/>
+                   </div>
+                   <div className="space-y-1">
+                       <label className="text-xs text-gray-400 block">Vmp (V)</label>
+                       <input type="number" min="0" value={selectedComponent.properties.vmp} onChange={(e) => handlePropChange('vmp', parseFloat(e.target.value))} className="w-full bg-gray-900 border border-gray-600 rounded px-2 py-1 text-white"/>
+                   </div>
+               </div>
+            </div>
+        )}
+
+        {/* Battery Properties */}
+        {selectedComponent.type === COMPONENT_TYPES.BATTERY && (
+            <div className="space-y-3">
+               <div className="space-y-1">
+                   <label className="text-xs text-gray-400 block">System Voltage (V)</label>
+                   <input type="number" min="0" value={selectedComponent.properties.voltage} onChange={(e) => handlePropChange('voltage', parseFloat(e.target.value))} className="w-full bg-gray-900 border border-gray-600 rounded px-2 py-1 text-white"/>
+               </div>
+               <div className="space-y-1">
+                   <label className="text-xs text-gray-400 block">Capacity (Ah)</label>
+                   <input type="number" min="0" value={selectedComponent.properties.capacityAh} onChange={(e) => handlePropChange('capacityAh', parseFloat(e.target.value))} className="w-full bg-gray-900 border border-gray-600 rounded px-2 py-1 text-white"/>
+               </div>
+               <div className="p-2 bg-gray-900 rounded border border-gray-700">
+                   <div className="flex justify-between items-center mb-1">
+                       <span className="text-gray-400 text-xs">State of Charge</span>
+                       <button onClick={() => handlePropChange('socAh', selectedComponent.properties.capacityAh)} className="text-[10px] bg-gray-700 px-1 rounded text-blue-300 hover:bg-gray-600">RESET</button>
+                   </div>
+                   <div className="w-full bg-gray-800 h-2 rounded overflow-hidden">
+                       <div className="h-full bg-green-500" style={{ width: `${Math.min(100, (selectedComponent.properties.socAh / selectedComponent.properties.capacityAh)*100)}%` }} />
+                   </div>
+                   <div className="flex justify-between mt-1">
+                       <span className="text-xs text-gray-400">{Math.round(selectedComponent.properties.socAh)} Ah</span>
+                       <span className="text-xs text-white font-mono">{selectedComponent.properties.terminalVoltage ? selectedComponent.properties.terminalVoltage.toFixed(2) + 'V' : ''}</span>
+                   </div>
+               </div>
+            </div>
+        )}
+
+        {/* Solar Controller Properties */}
+        {selectedComponent.type === COMPONENT_TYPES.SOLAR_CONTROLLER && (
+            <div className="space-y-3">
+               <div className="space-y-1">
+                   <label className="text-xs text-gray-400 block">Max Current Rating (A)</label>
+                   <input type="number" min="0" value={selectedComponent.properties.ratingA} onChange={(e) => handlePropChange('ratingA', parseFloat(e.target.value))} className="w-full bg-gray-900 border border-gray-600 rounded px-2 py-1 text-white"/>
+               </div>
+               <div className="space-y-1">
+                   <label className="text-xs text-gray-400 block">Efficiency (0.0 - 1.0)</label>
+                   <input type="number" min="0" max="1" step="0.01" value={selectedComponent.properties.efficiency} onChange={(e) => handlePropChange('efficiency', parseFloat(e.target.value))} className="w-full bg-gray-900 border border-gray-600 rounded px-2 py-1 text-white"/>
+               </div>
+               <div className="p-2 bg-gray-900 rounded border border-gray-700">
+                   <div className="text-gray-400 text-xs uppercase font-bold mb-1">Status</div>
+                   <div className="flex justify-between items-center">
+                        <span className={`text-xs ${selectedComponent.properties.isCharging ? 'text-green-400' : 'text-gray-500'}`}>
+                            {selectedComponent.properties.isCharging ? 'CHARGING' : 'STANDBY'}
+                        </span>
+                        {selectedComponent.properties.inputPowerW > 0 && (
+                            <span className="text-yellow-400 font-mono text-sm">
+                                {Math.round(selectedComponent.properties.inputPowerW)} W
+                            </span>
+                        )}
+                   </div>
+               </div>
             </div>
         )}
 
