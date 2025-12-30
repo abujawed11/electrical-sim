@@ -253,7 +253,10 @@ export const evaluateLoads = (components, wires, simulationState, voltages) => {
               };
 
               // Identify Source
-              const { hasMains, inverterIds } = findUpstreamSources(termL, phaseGraph, components);
+              const { hasMains, inverterIds, passThroughInverterIds } = findUpstreamSources(termL, phaseGraph, components);
+              // If the load is fed through an inverter in bypass, attribute current/power to that inverter too (pass-through).
+              passThroughInverterIds.forEach(id => addToDevice(id));
+
               // If Mains is reachable, it is the active source (inverter may still show voltage via bypass).
               if (hasMains) {
                   addToDevice('TOTAL_MAINS');
@@ -481,6 +484,7 @@ function findUpstreamMeters3P(startNode, graph, components) {
 function findUpstreamSources(startNode, graph, components) {
     let hasMains = false;
     const inverterIds = new Set();
+    const passThroughInverterIds = new Set();
     const queue = [startNode];
     const visited = new Set();
     visited.add(startNode);
@@ -491,19 +495,17 @@ function findUpstreamSources(startNode, graph, components) {
         const comp = components.find(c => c.id === compId);
 
         if (comp) {
-            if (comp.type === COMPONENT_TYPES.SUPPLY && comp.properties.enabled) {
+            if ((comp.type === COMPONENT_TYPES.SUPPLY || comp.type === COMPONENT_TYPES.SUPPLY_3P) && comp.properties.enabled) {
                 hasMains = true;
             }
-            if (
-                comp.type === COMPONENT_TYPES.INVERTER &&
-                comp.properties.enabled &&
-                !comp.properties.isBypassMode &&
-                comp.properties.socWh > 0 &&
-                termId === 'AC_OUT_L'
-            ) {
-                // Inverter continues to supply power during overload alarm period
-                // It only stops when enabled=false (after shutdown)
-                inverterIds.add(comp.id);
+            if (comp.type === COMPONENT_TYPES.INVERTER && comp.properties.enabled) {
+                if (!comp.properties.isBypassMode && comp.properties.socWh > 0 && termId === 'AC_OUT_L') {
+                    // Active Source (Battery Mode)
+                    inverterIds.add(comp.id);
+                } else if (comp.properties.isBypassMode && termId === 'AC_OUT_L') {
+                    // Passive Pass-through (Bypass Mode)
+                    passThroughInverterIds.add(comp.id);
+                }
             }
         }
 
@@ -516,5 +518,9 @@ function findUpstreamSources(startNode, graph, components) {
         }
     }
 
-    return { hasMains, inverterIds: Array.from(inverterIds) };
+    return { 
+        hasMains, 
+        inverterIds: Array.from(inverterIds),
+        passThroughInverterIds: Array.from(passThroughInverterIds)
+    };
 }

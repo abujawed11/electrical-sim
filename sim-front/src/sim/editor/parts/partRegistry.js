@@ -32,6 +32,10 @@ import { Isolator3P } from './Isolator3P';
 import { Feeder11kV } from './Feeder11kV';
 import { Busbar3P } from './Busbar3P';
 import { PhaseIndicator } from './PhaseIndicator';
+import { SolarPanel } from './SolarPanel';
+import { SolarController } from './SolarController';
+import { Battery } from './Battery';
+import { DCMCB } from './DCMCB';
 
 const COMPONENTS = {
   [COMPONENT_TYPES.SUPPLY]: Supply,
@@ -67,6 +71,10 @@ const COMPONENTS = {
   [COMPONENT_TYPES.BUSBAR_Y]: Busbar3P,
   [COMPONENT_TYPES.BUSBAR_B]: Busbar3P,
   [COMPONENT_TYPES.PHASE_INDICATOR]: PhaseIndicator,
+  [COMPONENT_TYPES.SOLAR_PANEL]: SolarPanel,
+  [COMPONENT_TYPES.SOLAR_CONTROLLER]: SolarController,
+  [COMPONENT_TYPES.BATTERY]: Battery,
+  [COMPONENT_TYPES.DC_MCB]: DCMCB,
 };
 
 

@@ -32,6 +32,11 @@ export const COMPONENT_TYPES = {
   BUSBAR_Y: 'BUSBAR_Y',
   BUSBAR_B: 'BUSBAR_B',
   PHASE_INDICATOR: 'PHASE_INDICATOR',
+  // Solar Components
+  SOLAR_PANEL: 'SOLAR_PANEL',
+  SOLAR_CONTROLLER: 'SOLAR_CONTROLLER',
+  BATTERY: 'BATTERY',
+  DC_MCB: 'DC_MCB',
 };
 
 export const TERMINAL_KINDS = {
@@ -45,6 +50,8 @@ export const TERMINAL_KINDS = {
   NEUTRAL: 'NEUTRAL',
   EARTH: 'EARTH',
   GENERIC: 'GENERIC',
+  DC_POS: 'DC_POS',
+  DC_NEG: 'DC_NEG',
 };
 
 export const LOAD_TYPES = {

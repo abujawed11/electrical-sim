@@ -10,7 +10,7 @@ import { COMPONENT_TYPES } from '../types';
  */
 export const evaluateAutoChangeover = (components, simulationState) => {
   const updatesList = [];
-  const { livePhaseSet, neutralSet } = simulationState;
+  const { livePhaseSet, neutralSet, terminalMeta } = simulationState;
   const now = Date.now();
 
   components.forEach(c => {
@@ -19,7 +19,13 @@ export const evaluateAutoChangeover = (components, simulationState) => {
           const mainsL = `${c.id}:AC_IN_L`;
           const mainsN = `${c.id}:AC_IN_N`;
           // Check if AC_IN is energized (Mains Present)
-          const mainsAvailable = livePhaseSet.has(mainsL) && neutralSet.has(mainsN);
+          const mainsElectricallyPresent = livePhaseSet.has(mainsL) && neutralSet.has(mainsN);
+
+          // Avoid false "mains present" due to inverter backfeed energizing AC_IN.
+          const srcType = terminalMeta?.[mainsL]?.sourceType;
+          const mainsAvailable = (srcType != null)
+              ? (mainsElectricallyPresent && srcType === 'GRID')
+              : mainsElectricallyPresent;
           
           let updates = {};
           let changed = false;

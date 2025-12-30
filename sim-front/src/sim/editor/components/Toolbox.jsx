@@ -6,7 +6,8 @@ import {
   Zap, Gauge, MinusCircle, ArrowDownCircle, Equal, ToggleRight, 
   ShieldAlert, ToggleLeft, Lightbulb, Box, Fan, Snowflake, Flame, 
   Droplets, Plug, AlertTriangle, User, Grid, BatteryCharging, 
-  Shuffle, Activity, Settings, ChevronDown, ChevronRight, Trash2, TowerControl 
+  Shuffle, Activity, Settings, ChevronDown, ChevronRight, Trash2, TowerControl,
+  Sun, Cpu
 } from 'lucide-react';
 
 // Icon Mapping
@@ -31,11 +32,16 @@ const TYPE_ICONS = {
   [COMPONENT_TYPES.MCB_3P]: ToggleRight,
   [COMPONENT_TYPES.RCCB]: ShieldAlert,
   [COMPONENT_TYPES.RCBO]: ShieldAlert,
+  [COMPONENT_TYPES.DC_MCB]: ToggleRight,
 
   [COMPONENT_TYPES.SWITCH]: ToggleLeft,
   [COMPONENT_TYPES.ISOLATOR_3P]: ToggleLeft,
   [COMPONENT_TYPES.CHANGEOVER]: Shuffle,
   [COMPONENT_TYPES.INVERTER]: BatteryCharging,
+
+  [COMPONENT_TYPES.SOLAR_PANEL]: Sun,
+  [COMPONENT_TYPES.SOLAR_CONTROLLER]: Cpu,
+  [COMPONENT_TYPES.BATTERY]: BatteryCharging,
 
   [COMPONENT_TYPES.LAMP]: Lightbulb,
   [COMPONENT_TYPES.GENERIC_LOAD]: Box,
@@ -53,6 +59,17 @@ const TYPE_ICONS = {
 
 const CATEGORIES = [
   {
+    id: 'solar',
+    title: 'Solar & DC',
+    types: [
+      COMPONENT_TYPES.SOLAR_PANEL,
+      COMPONENT_TYPES.SOLAR_CONTROLLER,
+      COMPONENT_TYPES.BATTERY,
+      COMPONENT_TYPES.DC_MCB,
+      COMPONENT_TYPES.INVERTER, // Shared
+    ]
+  },
+  {
     id: 'sources',
     title: 'Power & Metering',
     types: [
@@ -60,7 +77,6 @@ const CATEGORIES = [
       COMPONENT_TYPES.SUPPLY_3P,
       COMPONENT_TYPES.FEEDER_11KV,
       COMPONENT_TYPES.TRANSFORMER_3P,
-      COMPONENT_TYPES.INVERTER,
       COMPONENT_TYPES.METER,
       COMPONENT_TYPES.METER_3P,
       COMPONENT_TYPES.PHASE_INDICATOR,
@@ -68,7 +84,7 @@ const CATEGORIES = [
   },
   {
     id: 'protection',
-    title: 'Protection',
+    title: 'AC Protection',
     types: [
       COMPONENT_TYPES.MCB,
       COMPONENT_TYPES.MCB_3P,

@@ -247,6 +247,8 @@ export const Inverter = ({ id, type, x, y, isSelected, properties, onSelect, onD
         if (t.kind === 'PHASE') isEnergized = simulationState.livePhaseSet.has(terminalIdStr);
         if (t.kind === 'NEUTRAL') isEnergized = simulationState.neutralSet.has(terminalIdStr);
         if (t.kind === 'EARTH') isEnergized = simulationState.earthSet.has(terminalIdStr);
+        if (t.kind === 'DC_POS') isEnergized = simulationState.dcPosSet?.has(terminalIdStr);
+        if (t.kind === 'DC_NEG') isEnergized = simulationState.dcNegSet?.has(terminalIdStr);
 
         return (
           <Terminal

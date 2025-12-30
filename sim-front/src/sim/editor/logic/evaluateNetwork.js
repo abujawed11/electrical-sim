@@ -37,6 +37,10 @@ export const evaluateNetwork = (components, wires, pqStatus, voltageModel) => {
   const neutralSet = new Set();
   const earthSet = new Set();
   
+  // DC Sets
+  const dcPosSet = new Set();
+  const dcNegSet = new Set();
+  
   const socketStates = {};
   const protectedPhaseSet = new Set();
   const protectedNeutralSet = new Set();
@@ -54,11 +58,11 @@ export const evaluateNetwork = (components, wires, pqStatus, voltageModel) => {
   const terminalPhasors = Object.create(null);
   const terminalMeta = Object.create(null);
 
-  const upsertTerminalPhasor = (terminalId, system, phase, vLN) => {
+  const upsertTerminalPhasor = (terminalId, system, phase, vLN, sourceType) => {
     const prev = terminalVoltageLN[terminalId];
     if (prev != null && prev >= vLN) return;
     terminalVoltageLN[terminalId] = vLN;
-    terminalMeta[terminalId] = { system, phase };
+    terminalMeta[terminalId] = { system, phase, sourceType };
     if (!phase || vLN <= 0) {
       terminalPhasors[terminalId] = phasorZero();
       return;
@@ -70,6 +74,8 @@ export const evaluateNetwork = (components, wires, pqStatus, voltageModel) => {
   const conductorGraph = new Map();
   const neutralGraph = new Map();
   const earthGraph = new Map();
+  const dcPosGraph = new Map();
+  const dcNegGraph = new Map();
 
   const addEdge = (graph, nodeA, nodeB) => {
     if (!graph.has(nodeA)) graph.set(nodeA, []);
@@ -93,6 +99,10 @@ export const evaluateNetwork = (components, wires, pqStatus, voltageModel) => {
       if (term.kind === TERMINAL_KINDS.NEUTRAL || term.kind === TERMINAL_KINDS.GENERIC) addEdge(neutralGraph, fromId, toId);
       // Earth/Generic wires conduct Earth
       if (term.kind === TERMINAL_KINDS.EARTH || term.kind === TERMINAL_KINDS.GENERIC) addEdge(earthGraph, fromId, toId);
+      
+      // DC
+      if (term.kind === TERMINAL_KINDS.DC_POS || term.kind === TERMINAL_KINDS.GENERIC) addEdge(dcPosGraph, fromId, toId);
+      if (term.kind === TERMINAL_KINDS.DC_NEG || term.kind === TERMINAL_KINDS.GENERIC) addEdge(dcNegGraph, fromId, toId);
     }
   });
 
@@ -106,6 +116,12 @@ export const evaluateNetwork = (components, wires, pqStatus, voltageModel) => {
     if (comp.type === COMPONENT_TYPES.MCB) {
       if (comp.properties.isOn) addEdge(conductorGraph, `${comp.id}:LIN`, `${comp.id}:LOUT`);
     } 
+    else if (comp.type === COMPONENT_TYPES.DC_MCB) {
+        if (comp.properties.isOn) {
+            addEdge(dcPosGraph, `${comp.id}:IN_POS`, `${comp.id}:OUT_POS`);
+            addEdge(dcNegGraph, `${comp.id}:IN_NEG`, `${comp.id}:OUT_NEG`);
+        }
+    }
     else if (comp.type === COMPONENT_TYPES.SWITCH) {
       if (comp.properties.isOn) addEdge(conductorGraph, `${comp.id}:IN_L`, `${comp.id}:OUT_L`);
     } 
@@ -206,6 +222,23 @@ export const evaluateNetwork = (components, wires, pqStatus, voltageModel) => {
   const hvSourceMagByNode = Object.create(null);
   const lvSourceMagByNode = Object.create(null);
   const genericLvSourceMagByNode = Object.create(null);
+  const inverterSourceMagByNode = Object.create(null);
+  const inverterPhaseSources = [];
+
+  const dcPosSources = [];
+  const dcNegSources = [];
+
+  // Solar Panels (DC Source) - Always ON if enabled (Sun logic elsewhere)
+  components.filter(c => c.type === COMPONENT_TYPES.SOLAR_PANEL && c.properties.enabled).forEach(s => {
+      dcPosSources.push(`${s.id}:POS`);
+      dcNegSources.push(`${s.id}:NEG`);
+  });
+
+  // Batteries (DC Source)
+  components.filter(c => c.type === COMPONENT_TYPES.BATTERY).forEach(s => {
+      dcPosSources.push(`${s.id}:POS`);
+      dcNegSources.push(`${s.id}:NEG`);
+  });
 
   // 11kV Feeder
   components.filter(c => c.type === COMPONENT_TYPES.FEEDER_11KV && c.properties.enabled).forEach(s => {
@@ -279,9 +312,9 @@ export const evaluateNetwork = (components, wires, pqStatus, voltageModel) => {
       !c.properties.isBypassMode
   ).forEach(inv => {
       const src = `${inv.id}:AC_OUT_L`;
-      genericPhaseSources.push(src);
+      inverterPhaseSources.push(src);
       // Inverter output is modeled as "regulated"/stable for now (not affected by grid PQ)
-      genericLvSourceMagByNode[src] = lvBaseVoltageLN;
+      inverterSourceMagByNode[src] = lvBaseVoltageLN;
       neutralSources.push(`${inv.id}:AC_OUT_N`);
   });
 
@@ -301,7 +334,7 @@ export const evaluateNetwork = (components, wires, pqStatus, voltageModel) => {
     }
   };
 
-  const propagateWithVoltage = (sources, sourceMagByNode, phase, system, graph, resultSet) => {
+  const propagateWithVoltage = (sources, sourceMagByNode, phase, system, graph, resultSet, sourceType) => {
     const queue = [];
     sources.forEach(s => {
       const mag = Number(sourceMagByNode[s] ?? 0);
@@ -314,7 +347,7 @@ export const evaluateNetwork = (components, wires, pqStatus, voltageModel) => {
       if (prev != null && prev >= mag) continue;
       best.set(node, mag);
       resultSet.add(node);
-      upsertTerminalPhasor(node, system, phase, mag);
+      upsertTerminalPhasor(node, system, phase, mag, sourceType);
       const neighbors = graph.get(node) || [];
       neighbors.forEach(next => {
         const prevNext = best.get(next);
@@ -324,9 +357,13 @@ export const evaluateNetwork = (components, wires, pqStatus, voltageModel) => {
   };
 
   // 4. Propagate HV Sources
-  propagateWithVoltage(hvPhaseRSources, hvSourceMagByNode, 'R', 'HV', conductorGraph, hvPhaseRSet);
-  propagateWithVoltage(hvPhaseYSources, hvSourceMagByNode, 'Y', 'HV', conductorGraph, hvPhaseYSet);
-  propagateWithVoltage(hvPhaseBSources, hvSourceMagByNode, 'B', 'HV', conductorGraph, hvPhaseBSet);
+  propagateWithVoltage(hvPhaseRSources, hvSourceMagByNode, 'R', 'HV', conductorGraph, hvPhaseRSet, 'GRID');
+  propagateWithVoltage(hvPhaseYSources, hvSourceMagByNode, 'Y', 'HV', conductorGraph, hvPhaseYSet, 'GRID');
+  propagateWithVoltage(hvPhaseBSources, hvSourceMagByNode, 'B', 'HV', conductorGraph, hvPhaseBSet, 'GRID');
+
+  // Propagate DC
+  propagate(dcPosSources, dcPosGraph, dcPosSet);
+  propagate(dcNegSources, dcNegGraph, dcNegSet);
 
   // 5. Handle Transformers (HV -> LV)
   // Check if Primaries are energized by HV sets
@@ -390,10 +427,11 @@ export const evaluateNetwork = (components, wires, pqStatus, voltageModel) => {
   }
 
   // 6. Propagate LV Sources
-  propagateWithVoltage(phaseRSources, lvSourceMagByNode, 'R', 'LV', conductorGraph, phaseRSet);
-  propagateWithVoltage(phaseYSources, lvSourceMagByNode, 'Y', 'LV', conductorGraph, phaseYSet);
-  propagateWithVoltage(phaseBSources, lvSourceMagByNode, 'B', 'LV', conductorGraph, phaseBSet);
-  propagateWithVoltage(genericPhaseSources, genericLvSourceMagByNode, 'R', 'LV', conductorGraph, livePhaseSet);
+  propagateWithVoltage(phaseRSources, lvSourceMagByNode, 'R', 'LV', conductorGraph, phaseRSet, 'GRID');
+  propagateWithVoltage(phaseYSources, lvSourceMagByNode, 'Y', 'LV', conductorGraph, phaseYSet, 'GRID');
+  propagateWithVoltage(phaseBSources, lvSourceMagByNode, 'B', 'LV', conductorGraph, phaseBSet, 'GRID');
+  propagateWithVoltage(genericPhaseSources, genericLvSourceMagByNode, 'R', 'LV', conductorGraph, livePhaseSet, 'GRID');
+  propagateWithVoltage(inverterPhaseSources, inverterSourceMagByNode, 'R', 'LV', conductorGraph, livePhaseSet, 'INVERTER');
   propagate(neutralSources, neutralGraph, neutralSet);
   propagate(earthSources, earthGraph, earthSet);
 
@@ -509,12 +547,12 @@ export const evaluateNetwork = (components, wires, pqStatus, voltageModel) => {
   // Ensure neutral/earth are always 0V for measurement
   neutralSet.forEach(t => {
     terminalVoltageLN[t] = 0;
-    terminalMeta[t] = { system: 'LV', phase: null };
+    terminalMeta[t] = { system: 'LV', phase: null, sourceType: null };
     terminalPhasors[t] = phasorZero();
   });
   earthSet.forEach(t => {
     terminalVoltageLN[t] = 0;
-    terminalMeta[t] = { system: 'LV', phase: null };
+    terminalMeta[t] = { system: 'LV', phase: null, sourceType: null };
     terminalPhasors[t] = phasorZero();
   });
 
@@ -531,13 +569,10 @@ export const evaluateNetwork = (components, wires, pqStatus, voltageModel) => {
     hvPhaseRSet,
     hvPhaseYSet,
     hvPhaseBSet,
+    dcPosSet,
+    dcNegSet,
     terminalVoltageLN,
     terminalPhasors,
     terminalMeta,
-    voltageModel: {
-      lvBaseVoltageLN,
-      gridMultiplier,
-      gridLvPhaseVoltagesLN,
-    }
   };
 };

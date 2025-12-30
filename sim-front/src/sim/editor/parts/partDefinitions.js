@@ -231,6 +231,7 @@ export const PART_DEFINITIONS = {
       overloadShutdownDelayMs: 30000, // 30 seconds delay before shutdown
       overloadStartTime: 0, // When overload was first detected
       isAlarming: false, // Buzzer/alarm state
+      useExternalBattery: false, // Flag to indicate if external DC is detected
     },
     terminals: [
       { id: 'AC_IN_L', kind: TERMINAL_KINDS.PHASE, relX: -25, relY: -40, label: 'IN-L' },
@@ -238,6 +239,9 @@ export const PART_DEFINITIONS = {
       { id: 'AC_OUT_L', kind: TERMINAL_KINDS.PHASE, relX: 25, relY: 40, label: 'OUT-L' },
       { id: 'AC_OUT_N', kind: TERMINAL_KINDS.NEUTRAL, relX: 5, relY: 40, label: 'OUT-N' },
       { id: 'E', kind: TERMINAL_KINDS.EARTH, relX: 0, relY: 0, label: 'E' },
+      // Optional External DC
+      { id: 'BAT_POS', kind: TERMINAL_KINDS.DC_POS, relX: -30, relY: 0, label: 'DC+' },
+      { id: 'BAT_NEG', kind: TERMINAL_KINDS.DC_NEG, relX: 30, relY: 0, label: 'DC-' },
     ],
   },
   [COMPONENT_TYPES.CHANGEOVER]: {
@@ -415,6 +419,69 @@ export const PART_DEFINITIONS = {
       { id: 'Y', kind: TERMINAL_KINDS.PHASE_Y, relX: -10, relY: 20, label: 'Y' },
       { id: 'B', kind: TERMINAL_KINDS.PHASE_B, relX: 10, relY: 20, label: 'B' },
       { id: 'N', kind: TERMINAL_KINDS.NEUTRAL, relX: 30, relY: 20, label: 'N' },
+    ],
+  },
+  [COMPONENT_TYPES.SOLAR_PANEL]: {
+    name: 'Solar Panel (PV)',
+    defaultProperties: {
+      label: 'PV-1',
+      powerW: 200, // Rated Power
+      voc: 22, // Open Circuit Voltage
+      vmp: 18, // Max Power Voltage
+      isc: 11, // Short Circuit Current
+      imp: 11, // Max Power Current
+      enabled: true,
+    },
+    terminals: [
+      { id: 'POS', kind: TERMINAL_KINDS.DC_POS, relX: -15, relY: 40, label: '+' },
+      { id: 'NEG', kind: TERMINAL_KINDS.DC_NEG, relX: 15, relY: 40, label: '-' },
+    ],
+  },
+  [COMPONENT_TYPES.BATTERY]: {
+    name: 'Battery (Lead Acid)',
+    defaultProperties: {
+      label: 'BAT-1',
+      voltage: 12,
+      capacityAh: 150,
+      socAh: 150, // State of Charge
+      soh: 100, // State of Health
+    },
+    terminals: [
+      { id: 'POS', kind: TERMINAL_KINDS.DC_POS, relX: -20, relY: -30, label: '+' },
+      { id: 'NEG', kind: TERMINAL_KINDS.DC_NEG, relX: 20, relY: -30, label: '-' },
+    ],
+  },
+  [COMPONENT_TYPES.SOLAR_CONTROLLER]: {
+    name: 'Solar Charge Controller (MPPT)',
+    defaultProperties: {
+      label: 'MPPT-1',
+      ratingA: 40, // Max Charging Current
+      systemVoltage: 12, // Auto-detect usually
+      efficiency: 0.95,
+      isCharging: false,
+    },
+    terminals: [
+      { id: 'PV_POS', kind: TERMINAL_KINDS.DC_POS, relX: -30, relY: -40, label: 'PV+' },
+      { id: 'PV_NEG', kind: TERMINAL_KINDS.DC_NEG, relX: -10, relY: -40, label: 'PV-' },
+      { id: 'BAT_POS', kind: TERMINAL_KINDS.DC_POS, relX: 10, relY: 40, label: 'BAT+' },
+      { id: 'BAT_NEG', kind: TERMINAL_KINDS.DC_NEG, relX: 30, relY: 40, label: 'BAT-' },
+    ],
+  },
+  [COMPONENT_TYPES.DC_MCB]: {
+    name: 'DC MCB',
+    defaultProperties: {
+      label: 'DC-MCB',
+      rating: '32A',
+      isOn: true,
+      isTripped: false,
+    },
+    terminals: [
+      { id: 'IN_POS', kind: TERMINAL_KINDS.DC_POS, relX: -10, relY: -30, label: 'IN+' },
+      { id: 'OUT_POS', kind: TERMINAL_KINDS.DC_POS, relX: -10, relY: 30, label: 'OUT+' },
+      // Optional Neg pass-through or just single pole
+      // Usually DC breakers are 2-pole for solar
+      { id: 'IN_NEG', kind: TERMINAL_KINDS.DC_NEG, relX: 10, relY: -30, label: 'IN-' },
+      { id: 'OUT_NEG', kind: TERMINAL_KINDS.DC_NEG, relX: 10, relY: 30, label: 'OUT-' },
     ],
   },
 };
