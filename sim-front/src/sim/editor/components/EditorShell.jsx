@@ -4,6 +4,7 @@ import { PropertiesPanel } from './PropertiesPanel';
 import { CanvasStage } from './CanvasStage';
 import { LessonPanel } from './LessonPanel';
 import { SimController } from './SimController';
+import { MeasurementPanel } from './MeasurementPanel';
 import { useEditorStore } from '../store';
 
 export const EditorShell = () => {
@@ -106,6 +107,9 @@ export const EditorShell = () => {
                  )}
              </div>
          )}
+         
+         {/* Probe Tools Panel */}
+         <MeasurementPanel />
 
          <CanvasStage />
          <LessonPanel />

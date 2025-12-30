@@ -6,6 +6,8 @@ export const Terminal = ({ componentId, terminal, isHovered, isEnergized, onMous
   const startWire = useEditorStore((state) => state.startWire);
   const completeWire = useEditorStore((state) => state.completeWire);
   const draftWire = useEditorStore((state) => state.draftWire);
+  const activeTool = useEditorStore((state) => state.activeTool);
+  const addProbePoint = useEditorStore((state) => state.addProbePoint);
 
   const isDrafting = !!draftWire;
   const isSource = isDrafting && draftWire.from.compId === componentId && draftWire.from.terminalId === terminal.id;
@@ -61,6 +63,17 @@ export const Terminal = ({ componentId, terminal, isHovered, isEnergized, onMous
 
   const handleClick = (e) => {
     e.cancelBubble = true;
+    
+    if (activeTool === 'VOLTMETER') {
+        addProbePoint({ type: 'terminal', compId: componentId, terminalId: terminal.id, x: 0, y: 0 });
+        return;
+    }
+    
+    if (activeTool === 'AMMETER') {
+        // Ammeter strictly on wires for now
+        return;
+    }
+
     if (isDrafting) {
       completeWire(componentId, terminal.id);
     } else {

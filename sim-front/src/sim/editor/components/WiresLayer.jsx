@@ -11,9 +11,67 @@ export const WiresLayer = () => {
   const selectedWireId = useEditorStore((state) => state.selectedWireId);
   const selectWire = useEditorStore((state) => state.selectWire);
   const simulationState = useEditorStore((state) => state.simulationState);
+  
+  // Tool State
+  const activeTool = useEditorStore((state) => state.activeTool);
+  const measureCurrent = useEditorStore((state) => state.measureCurrent);
+  const addProbePoint = useEditorStore((state) => state.addProbePoint);
 
   // Destructure sets for cleaner lookups
   const { livePhaseSet, neutralSet, earthSet, protectedPhaseSet, protectedNeutralSet, phaseRSet, phaseYSet, phaseBSet } = simulationState;
+
+  const handleWireClick = (e, wire) => {
+      e.cancelBubble = true;
+      
+      if (activeTool === 'AMMETER') {
+          // Attempt to find relevant current
+          // Strategy: Check endpoints. If one is a tracked device (Load/Breaker), use its current.
+          // Priority: Load > Breaker > Source
+          const loads = simulationState.deviceLoads || {};
+          const fromHasLoad = !!loads[wire.from.compId];
+          const toHasLoad = !!loads[wire.to.compId];
+          
+          let targetId = null;
+
+          // Check if endpoints are Loads
+          const fromType = components.find(c => c.id === wire.from.compId)?.type;
+          const toType = components.find(c => c.id === wire.to.compId)?.type;
+          
+          const isLoad = (t) => [
+              'LAMP', 'FAN', 'AC', 'HEATER', 'GEYSER', 'GENERIC_LOAD', 'LOAD_3P_BALANCED'
+          ].includes(t);
+
+          if (isLoad(toType)) targetId = wire.to.compId;
+          else if (isLoad(fromType)) targetId = wire.from.compId;
+          else if (toHasLoad && toType !== 'SUPPLY' && toType !== 'SUPPLY_3P') targetId = wire.to.compId; // Breaker?
+          else if (fromHasLoad && fromType !== 'SUPPLY' && fromType !== 'SUPPLY_3P') targetId = wire.from.compId;
+          else if (toType === 'SUPPLY' || toType === 'SUPPLY_3P') targetId = 'TOTAL_MAINS'; // Fallback to source total if connected to source
+          else if (fromType === 'SUPPLY' || fromType === 'SUPPLY_3P') targetId = 'TOTAL_MAINS';
+          
+          if (targetId) {
+              measureCurrent(targetId);
+          } else {
+              // No tracked device found (e.g. JB to JB without load context directly)
+              // For MVP, show 0 or user must click closer to device
+              measureCurrent(null); 
+          }
+          return;
+      }
+
+      if (activeTool === 'VOLTMETER') {
+          // Wire is a node. Use 'from' terminal as reference.
+          addProbePoint({ 
+              type: 'wire', 
+              compId: wire.from.compId, 
+              terminalId: wire.from.terminalId,
+              x: e.evt.layerX, // approximate for visual feedback if needed
+              y: e.evt.layerY
+          });
+          return;
+      }
+
+      selectWire(wire.id);
+  };
 
   return (
     <Group>
@@ -112,14 +170,8 @@ export const WiresLayer = () => {
                 const container = e.target.getStage().container();
                 container.style.cursor = 'default';
               }}
-              onClick={(e) => {
-                e.cancelBubble = true;
-                selectWire(wire.id);
-              }}
-              onTap={(e) => {
-                e.cancelBubble = true;
-                selectWire(wire.id);
-              }}
+              onClick={(e) => handleWireClick(e, wire)}
+              onTap={(e) => handleWireClick(e, wire)}
             />
             <Line
               points={points}

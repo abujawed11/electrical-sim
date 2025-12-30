@@ -49,11 +49,105 @@ export const useEditorStore = create(
       activeLessonId: 'L0',
       lessonStatus: { passed: false, checklist: [] },
       allowedParts: null, 
+      
+      // --- Measurement Tools ---
+      activeTool: 'IDLE', // 'IDLE', 'VOLTMETER', 'AMMETER'
+      probePoints: [], // [{ type: 'terminal', compId, terminalId, x, y }]
+      measurementResult: null, // { type: 'VOLT'|'AMP', val: string, unit: string }
 
       stage: {
         scale: 1,
         x: 0,
         y: 0,
+      },
+
+      setActiveTool: (tool) => {
+          set({ 
+              activeTool: tool, 
+              probePoints: [], 
+              measurementResult: null,
+              selectedId: null,
+              draftWire: null 
+          });
+      },
+
+      addProbePoint: (point) => {
+          const { activeTool, probePoints, simulationState, mainsVoltage } = get();
+          
+          if (activeTool === 'VOLTMETER') {
+              const newPoints = [...probePoints, point];
+              if (newPoints.length === 2) {
+                  // Calculate Voltage
+                  const getPhasor = (compId, termId) => {
+                      const id = `${compId}:${termId}`;
+                      const { livePhaseSet, neutralSet, earthSet, phaseRSet, phaseYSet, phaseBSet, hvPhaseRSet, hvPhaseYSet, hvPhaseBSet } = simulationState;
+                      
+                      if (neutralSet.has(id) || earthSet.has(id)) return { re: 0, im: 0 };
+                      
+                      // HV (11kV L-L -> 6350V L-N)
+                      const hvMag = 11000 / Math.sqrt(3);
+                      if (hvPhaseRSet.has(id)) return { re: hvMag, im: 0 };
+                      if (hvPhaseYSet.has(id)) return { re: hvMag * -0.5, im: hvMag * -0.866 };
+                      if (hvPhaseBSet.has(id)) return { re: hvMag * -0.5, im: hvMag * 0.866 };
+
+                      // LV
+                      const lvMag = mainsVoltage;
+                      if (phaseRSet.has(id)) return { re: lvMag, im: 0 };
+                      if (phaseYSet.has(id)) return { re: lvMag * -0.5, im: lvMag * -0.866 };
+                      if (phaseBSet.has(id)) return { re: lvMag * -0.5, im: lvMag * 0.866 };
+                      
+                      // Fallback for generic single phase (treated as R)
+                      if (livePhaseSet.has(id)) return { re: lvMag, im: 0 };
+                      
+                      return { re: 0, im: 0 }; // Dead
+                  };
+
+                  const p1 = getPhasor(newPoints[0].compId, newPoints[0].terminalId);
+                  const p2 = getPhasor(newPoints[1].compId, newPoints[1].terminalId);
+
+                  const diffRe = p1.re - p2.re;
+                  const diffIm = p1.im - p2.im;
+                  const mag = Math.sqrt(diffRe*diffRe + diffIm*diffIm);
+                  
+                  set({ 
+                      probePoints: newPoints,
+                      measurementResult: { 
+                          type: 'VOLT', 
+                          val: mag.toFixed(1), 
+                          unit: 'V' 
+                      } 
+                  });
+              } else {
+                  set({ probePoints: newPoints });
+              }
+          }
+      },
+
+      measureCurrent: (compId) => {
+          const { simulationState } = get();
+          const load = simulationState.deviceLoads?.[compId];
+          // If the component has calculated load (Source, Load, or Breaker)
+          if (load) {
+              set({ 
+                  measurementResult: { 
+                      type: 'AMP', 
+                      val: load.currentA.toFixed(2), 
+                      unit: 'A' 
+                  } 
+              });
+          } else {
+               set({ 
+                  measurementResult: { 
+                      type: 'AMP', 
+                      val: '0.00', 
+                      unit: 'A' 
+                  } 
+              });
+          }
+      },
+
+      resetTool: () => {
+          set({ activeTool: 'IDLE', probePoints: [], measurementResult: null });
       },
 
       setMainsVoltage: (v) => {
