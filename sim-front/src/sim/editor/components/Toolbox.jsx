@@ -6,13 +6,14 @@ import {
   Zap, Gauge, MinusCircle, ArrowDownCircle, Equal, ToggleRight, 
   ShieldAlert, ToggleLeft, Lightbulb, Box, Fan, Snowflake, Flame, 
   Droplets, Plug, AlertTriangle, User, Grid, BatteryCharging, 
-  Shuffle, Activity, Settings, ChevronDown, ChevronRight, Trash2 
+  Shuffle, Activity, Settings, ChevronDown, ChevronRight, Trash2, TowerControl 
 } from 'lucide-react';
 
 // Icon Mapping
 const TYPE_ICONS = {
   [COMPONENT_TYPES.SUPPLY]: Zap,
   [COMPONENT_TYPES.SUPPLY_3P]: Zap,
+  [COMPONENT_TYPES.FEEDER_11KV]: TowerControl,
   [COMPONENT_TYPES.TRANSFORMER_3P]: Activity,
   [COMPONENT_TYPES.METER]: Gauge,
   [COMPONENT_TYPES.METER_3P]: Gauge,
@@ -57,6 +58,7 @@ const CATEGORIES = [
     types: [
       COMPONENT_TYPES.SUPPLY,
       COMPONENT_TYPES.SUPPLY_3P,
+      COMPONENT_TYPES.FEEDER_11KV,
       COMPONENT_TYPES.TRANSFORMER_3P,
       COMPONENT_TYPES.INVERTER,
       COMPONENT_TYPES.METER,

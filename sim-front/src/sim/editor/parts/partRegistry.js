@@ -29,6 +29,7 @@ import { Load3P } from './Load3P';
 import { Meter3P } from './Meter3P';
 import { MCB3P } from './MCB3P';
 import { Isolator3P } from './Isolator3P';
+import { Feeder11kV } from './Feeder11kV';
 import { Busbar3P } from './Busbar3P';
 import { PhaseIndicator } from './PhaseIndicator';
 
@@ -61,6 +62,7 @@ const COMPONENTS = {
   [COMPONENT_TYPES.METER_3P]: Meter3P,
   [COMPONENT_TYPES.MCB_3P]: MCB3P,
   [COMPONENT_TYPES.ISOLATOR_3P]: Isolator3P,
+  [COMPONENT_TYPES.FEEDER_11KV]: Feeder11kV,
   [COMPONENT_TYPES.BUSBAR_R]: Busbar3P,
   [COMPONENT_TYPES.BUSBAR_Y]: Busbar3P,
   [COMPONENT_TYPES.BUSBAR_B]: Busbar3P,

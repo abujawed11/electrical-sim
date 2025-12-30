@@ -495,10 +495,34 @@ export const useEditorStore = create(
 
         if (!fromTerm || !toTerm) { set({ draftWire: null }); return; }
 
+        // --- Connection Validation Logic ---
+        const isHV = (k) => k.startsWith('HV_PHASE');
+        const isLV = (k) => (k.startsWith('PHASE') || k === 'NEUTRAL') && !k.startsWith('HV_PHASE');
+        const isGeneric = (k) => k === 'GENERIC';
+
+        const fromIsHV = isHV(fromTerm.kind);
+        const toIsHV = isHV(toTerm.kind);
+        const fromIsLV = isLV(fromTerm.kind);
+        const toIsLV = isLV(toTerm.kind);
+        const fromIsGen = isGeneric(fromTerm.kind);
+        const toIsGen = isGeneric(toTerm.kind);
+
+        // Rule 1: HV Strictness
+        // HV can only connect to HV.
+        // Cannot connect HV to LV.
+        // Cannot connect HV to Generic (Assume Generic is LV rated).
+        if (fromIsHV || toIsHV) {
+            if (!fromIsHV || !toIsHV) {
+                 get().addMessage(`⚠️ DANGER: Cannot connect 11kV High Voltage to Low Voltage/Generic components!`, 'error');
+                 set({ draftWire: null });
+                 return;
+            }
+        }
+
         if (fromTerm.kind !== toTerm.kind) {
-          // Allow GENERIC to connect to anything
+          // Allow GENERIC to connect to LV (already blocked for HV above)
           if (fromTerm.kind === 'GENERIC' || toTerm.kind === 'GENERIC') {
-              // GENERIC can connect to anything - allow
+              // GENERIC can connect to anything (that is not HV)
           }
           // Allow specific phases (PHASE_R, PHASE_Y, PHASE_B) to connect to generic PHASE
           else if (
@@ -507,9 +531,15 @@ export const useEditorStore = create(
           ) {
               // Phase-specific to generic phase - allow (e.g., BUSBAR_R to MCB)
           }
+          // Allow HV_PHASE_X <-> HV_PHASE_X (Strict Phase Matching for HV? Optional, but good for safety)
+          // For now, let's enforce kind equality for HV phases unless we add a Generic HV kind later.
+          // Since we established both are HV above, and kind != kind here:
+          // e.g. HV_PHASE_R to HV_PHASE_Y -> Short Circuit!
+          // We should probably block cross-phase connections generally unless it's a Fault component.
+          // But existing logic blocks it via the "else" block below.
           else {
               console.warn(`Mismatch: ${fromTerm.kind} vs ${toTerm.kind}`);
-              get().addMessage(`Cannot connect ${fromTerm.kind} to ${toTerm.kind}. Use a Junction Box or Fault Part if needed.`, 'error');
+              get().addMessage(`Cannot connect ${fromTerm.kind} to ${toTerm.kind}.`, 'error');
               set({ draftWire: null });
               return;
           }

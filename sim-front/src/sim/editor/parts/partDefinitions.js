@@ -260,6 +260,20 @@ export const PART_DEFINITIONS = {
       { id: 'OUT_N', kind: TERMINAL_KINDS.NEUTRAL, relX: 15, relY: 30, label: 'N' },
     ],
   },
+  [COMPONENT_TYPES.FEEDER_11KV]: {
+    name: '11 kV Feeder (Substation)',
+    defaultProperties: {
+      label: '11kV SOURCE',
+      enabled: true,
+      voltage: 11000,
+    },
+    terminals: [
+      { id: 'R', kind: TERMINAL_KINDS.HV_PHASE_R, relX: -30, relY: 30, label: 'R (11kV)' },
+      { id: 'Y', kind: TERMINAL_KINDS.HV_PHASE_Y, relX: -10, relY: 30, label: 'Y (11kV)' },
+      { id: 'B', kind: TERMINAL_KINDS.HV_PHASE_B, relX: 10, relY: 30, label: 'B (11kV)' },
+      { id: 'E', kind: TERMINAL_KINDS.EARTH, relX: 30, relY: 30, label: 'E' },
+    ],
+  },
   [COMPONENT_TYPES.SUPPLY_3P]: {
     name: '3-Phase Supply',
     defaultProperties: {
@@ -286,9 +300,9 @@ export const PART_DEFINITIONS = {
     },
     terminals: [
       // Primary (HV)
-      { id: 'PRI_R', kind: TERMINAL_KINDS.PHASE_R, relX: -40, relY: -40, label: 'HV-R' },
-      { id: 'PRI_Y', kind: TERMINAL_KINDS.PHASE_Y, relX: 0, relY: -40, label: 'HV-Y' },
-      { id: 'PRI_B', kind: TERMINAL_KINDS.PHASE_B, relX: 40, relY: -40, label: 'HV-B' },
+      { id: 'PRI_R', kind: TERMINAL_KINDS.HV_PHASE_R, relX: -40, relY: -40, label: 'HV-R' },
+      { id: 'PRI_Y', kind: TERMINAL_KINDS.HV_PHASE_Y, relX: 0, relY: -40, label: 'HV-Y' },
+      { id: 'PRI_B', kind: TERMINAL_KINDS.HV_PHASE_B, relX: 40, relY: -40, label: 'HV-B' },
       // Secondary (LV)
       { id: 'SEC_R', kind: TERMINAL_KINDS.PHASE_R, relX: -40, relY: 40, label: 'r' },
       { id: 'SEC_Y', kind: TERMINAL_KINDS.PHASE_Y, relX: -15, relY: 40, label: 'y' },

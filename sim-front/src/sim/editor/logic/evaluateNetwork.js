@@ -3,19 +3,24 @@ import { PART_DEFINITIONS as PART_REGISTRY } from '../parts/partDefinitions';
 
 /**
  * Recomputes the electrical network state.
- * Supports Single Phase and 3-Phase systems.
+ * Supports Single Phase, 3-Phase LV, and 11kV HV systems.
  * 
  * @param {Array} components - List of all components in the scene
  * @param {Array} wires - List of all wires
- * @returns {Object} { livePhaseSet, neutralSet, earthSet, phaseRSet, phaseYSet, phaseBSet, ... }
+ * @returns {Object} { livePhaseSet, neutralSet, earthSet, phaseRSet, ... hvPhaseRSet ... }
  */
 export const evaluateNetwork = (components, wires) => {
-  // Sets for energized terminals
+  // Sets for energized terminals (LV)
   const phaseRSet = new Set();
   const phaseYSet = new Set();
   const phaseBSet = new Set();
-  const livePhaseSet = new Set(); // Legacy/Union of R+Y+B+Generic
+  const livePhaseSet = new Set(); // Legacy/Union of LV R+Y+B+Generic
   
+  // Sets for energized terminals (HV 11kV)
+  const hvPhaseRSet = new Set();
+  const hvPhaseYSet = new Set();
+  const hvPhaseBSet = new Set();
+
   const neutralSet = new Set();
   const earthSet = new Set();
   
@@ -24,8 +29,6 @@ export const evaluateNetwork = (components, wires) => {
   const protectedNeutralSet = new Set();
 
   // 1. Build Adjacency Graphs (Full Connectivity)
-  // We share the graph for all phases because wires are generic conductors.
-  // We propagate different sources through the same graph.
   const conductorGraph = new Map();
   const neutralGraph = new Map();
   const earthGraph = new Map();
@@ -46,8 +49,8 @@ export const evaluateNetwork = (components, wires) => {
     const registry = PART_REGISTRY[comp.type];
     const term = registry.terminals.find(t => t.id === wire.from.terminalId);
     if (term) {
-      // Phase/Generic wires conduct Phases
-      if (term.kind.startsWith('PHASE') || term.kind === TERMINAL_KINDS.GENERIC) addEdge(conductorGraph, fromId, toId);
+      // Phase/Generic/HV wires conduct Phases
+      if (term.kind.includes('PHASE') || term.kind === TERMINAL_KINDS.GENERIC) addEdge(conductorGraph, fromId, toId);
       // Neutral/Generic wires conduct Neutral
       if (term.kind === TERMINAL_KINDS.NEUTRAL || term.kind === TERMINAL_KINDS.GENERIC) addEdge(neutralGraph, fromId, toId);
       // Earth/Generic wires conduct Earth
@@ -147,17 +150,28 @@ export const evaluateNetwork = (components, wires) => {
           addEdge(conductorGraph, `${comp.id}:${terms[i].id}`, `${comp.id}:${terms[i+1].id}`);
       }
     }
-    // 3-Phase Devices usually don't have internal phase-to-phase shorts unless faulted.
-    // Supply and Transformers are sources, handled below.
   });
 
-  // 2. Identify Primary Sources (Mains, Generators)
+  // 2. Identify Primary Sources
   const phaseRSources = [];
   const phaseYSources = [];
   const phaseBSources = [];
   const genericPhaseSources = []; // For Single Phase Supply L
   const neutralSources = [];
   const earthSources = [];
+
+  // HV Sources (11kV)
+  const hvPhaseRSources = [];
+  const hvPhaseYSources = [];
+  const hvPhaseBSources = [];
+
+  // 11kV Feeder
+  components.filter(c => c.type === COMPONENT_TYPES.FEEDER_11KV && c.properties.enabled).forEach(s => {
+      hvPhaseRSources.push(`${s.id}:R`);
+      hvPhaseYSources.push(`${s.id}:Y`);
+      hvPhaseBSources.push(`${s.id}:B`);
+      earthSources.push(`${s.id}:E`);
+  });
 
   // Single Phase Supplies
   components.filter(c => c.type === COMPONENT_TYPES.SUPPLY && c.properties.enabled).forEach(s => {
@@ -175,9 +189,7 @@ export const evaluateNetwork = (components, wires) => {
       earthSources.push(`${s.id}:E`);
   });
 
-  // Inverters (Source if active and NOT in bypass)
-  // NOTE: Don't check isOverloaded - inverter continues outputting during alarm period
-  // It only stops when enabled=false (after shutdown delay)
+  // Inverters
   components.filter(c =>
       c.type === COMPONENT_TYPES.INVERTER &&
       c.properties.enabled &&
@@ -204,16 +216,13 @@ export const evaluateNetwork = (components, wires) => {
     }
   };
 
-  // 4. Propagate Primary Sources
-  propagate(phaseRSources, conductorGraph, phaseRSet);
-  propagate(phaseYSources, conductorGraph, phaseYSet);
-  propagate(phaseBSources, conductorGraph, phaseBSet);
-  propagate(genericPhaseSources, conductorGraph, livePhaseSet); // Generic L -> livePhaseSet
-  propagate(neutralSources, neutralGraph, neutralSet);
-  propagate(earthSources, earthGraph, earthSet);
+  // 4. Propagate HV Sources
+  propagate(hvPhaseRSources, conductorGraph, hvPhaseRSet);
+  propagate(hvPhaseYSources, conductorGraph, hvPhaseYSet);
+  propagate(hvPhaseBSources, conductorGraph, hvPhaseBSet);
 
-  // 5. Handle Transformers (Secondary Sources)
-  // Check if Primaries are energized, then add Secondaries as sources and propagate again.
+  // 5. Handle Transformers (HV -> LV)
+  // Check if Primaries are energized by HV sets
   const transformers = components.filter(c => c.type === COMPONENT_TYPES.TRANSFORMER_3P);
   
   if (transformers.length > 0) {
@@ -223,41 +232,44 @@ export const evaluateNetwork = (components, wires) => {
       const txNSources = [];
 
       transformers.forEach(tx => {
-          // Check Primary Energization
-          // We check if the Primary terminals are in the propagated sets
-          const hasR = phaseRSet.has(`${tx.id}:PRI_R`) || livePhaseSet.has(`${tx.id}:PRI_R`);
-          const hasY = phaseYSet.has(`${tx.id}:PRI_Y`) || livePhaseSet.has(`${tx.id}:PRI_Y`);
-          const hasB = phaseBSet.has(`${tx.id}:PRI_B`) || livePhaseSet.has(`${tx.id}:PRI_B`);
+          // Check Primary Energization via HV sets (Strict 11kV check)
+          // Or fallback to generic live check if we want to allow LV->HV backfeed (not for now)
+          const hasR = hvPhaseRSet.has(`${tx.id}:PRI_R`);
+          const hasY = hvPhaseYSet.has(`${tx.id}:PRI_Y`);
+          const hasB = hvPhaseBSet.has(`${tx.id}:PRI_B`);
           
-          // Simplified: If all 3 phases are present (or generic live present on all), energize secondary
-          // Ideally check correct phase sequence, but simple presence is enough for now.
           if (hasR && hasY && hasB) {
               txRSources.push(`${tx.id}:SEC_R`);
               txYSources.push(`${tx.id}:SEC_Y`);
               txBSources.push(`${tx.id}:SEC_B`);
               
-              // Secondary Neutral available if Star connection
-              // DELTA_STAR or STAR_STAR
               if (tx.properties.connection && tx.properties.connection.endsWith('STAR')) {
                   txNSources.push(`${tx.id}:SEC_N`);
               }
           }
       });
 
-      // Propagate Secondary Sources
-      propagate(txRSources, conductorGraph, phaseRSet);
-      propagate(txYSources, conductorGraph, phaseYSet);
-      propagate(txBSources, conductorGraph, phaseBSet);
-      propagate(txNSources, neutralGraph, neutralSet);
+      // Add Secondary Sources to LV Source Lists
+      txRSources.forEach(s => phaseRSources.push(s));
+      txYSources.forEach(s => phaseYSources.push(s));
+      txBSources.forEach(s => phaseBSources.push(s));
+      txNSources.forEach(s => neutralSources.push(s));
   }
 
-  // 6. Merge Sets for Legacy/Generic components
-  // Any terminal in R, Y, or B sets is considered "Live" for single-phase generic components
+  // 6. Propagate LV Sources
+  propagate(phaseRSources, conductorGraph, phaseRSet);
+  propagate(phaseYSources, conductorGraph, phaseYSet);
+  propagate(phaseBSources, conductorGraph, phaseBSet);
+  propagate(genericPhaseSources, conductorGraph, livePhaseSet);
+  propagate(neutralSources, neutralGraph, neutralSet);
+  propagate(earthSources, earthGraph, earthSet);
+
+  // 7. Merge Sets for Legacy/Generic components
   phaseRSet.forEach(t => livePhaseSet.add(t));
   phaseYSet.forEach(t => livePhaseSet.add(t));
   phaseBSet.forEach(t => livePhaseSet.add(t));
 
-  // 7. Protection Analysis (Isolated Graph for RCCB/RCBO)
+  // 8. Protection Analysis (Isolated Graph for RCCB/RCBO)
   const protPhaseGraph = new Map();
   const protNeutralGraph = new Map();
 
@@ -270,7 +282,7 @@ export const evaluateNetwork = (components, wires) => {
     const registry = PART_REGISTRY[comp.type];
     const term = registry.terminals.find(t => t.id === wire.from.terminalId);
     if (term) {
-      if (term.kind.startsWith('PHASE') || term.kind === TERMINAL_KINDS.GENERIC) addEdge(protPhaseGraph, fromId, toId);
+      if (term.kind.includes('PHASE') || term.kind === TERMINAL_KINDS.GENERIC) addEdge(protPhaseGraph, fromId, toId);
       if (term.kind === TERMINAL_KINDS.NEUTRAL || term.kind === TERMINAL_KINDS.GENERIC) addEdge(protNeutralGraph, fromId, toId);
     }
   });
@@ -322,7 +334,7 @@ export const evaluateNetwork = (components, wires) => {
   propagate(rccbPhaseOuts, protPhaseGraph, protectedPhaseSet);
   propagate(rccbNeutralOuts, protNeutralGraph, protectedNeutralSet);
 
-  // 8. Compute Socket States
+  // 9. Compute Socket States
   components.forEach(comp => {
     if (comp.type === COMPONENT_TYPES.SOCKET) {
       const hasL = livePhaseSet.has(`${comp.id}:L`);
@@ -361,5 +373,18 @@ export const evaluateNetwork = (components, wires) => {
     }
   });
 
-  return { livePhaseSet, neutralSet, earthSet, socketStates, protectedPhaseSet, protectedNeutralSet, phaseRSet, phaseYSet, phaseBSet };
+  return { 
+    livePhaseSet, 
+    neutralSet, 
+    earthSet, 
+    socketStates, 
+    protectedPhaseSet, 
+    protectedNeutralSet, 
+    phaseRSet, 
+    phaseYSet, 
+    phaseBSet,
+    hvPhaseRSet,
+    hvPhaseYSet,
+    hvPhaseBSet
+  };
 };
