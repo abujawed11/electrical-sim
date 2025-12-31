@@ -482,7 +482,11 @@ export const PART_DEFINITIONS = {
       ratingA: 40, // Max Charging Current
       systemVoltage: 12, // Auto-detect usually
       efficiency: 0.95,
+      enabled: true,
+      commonNegative: false,
       isCharging: false,
+      inputPowerW: 0,
+      chargingW: 0,
     },
     terminals: [
       { id: 'PV_POS', kind: TERMINAL_KINDS.DC_POS, relX: -30, relY: -40, label: 'PV+' },
