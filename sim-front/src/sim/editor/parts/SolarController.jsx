@@ -13,9 +13,11 @@ export const SolarController = ({ id, type, x, y, isSelected, properties, onSele
   const mode = properties.mode || (properties.isCharging ? 'CHARGING' : 'IDLE');
   const chargingA = Number(properties.chargingA || 0);
   const pvInputW = Number(properties.pvInputW || properties.inputPowerW || 0);
+  const chargingW = Number(properties.chargingW || 0);
 
   const modeColor =
-    mode === 'CHARGING' ? '#10b981' :
+    (mode === 'BULK' || mode === 'ABSORB' || mode === 'FLOAT') ? '#10b981' :
+    mode === 'FULL' ? '#9CA3AF' :
     mode === 'NO_PV' ? '#f59e0b' :
     mode === 'NO_BATTERY' ? '#f97316' :
     '#9CA3AF';
@@ -74,13 +76,13 @@ export const SolarController = ({ id, type, x, y, isSelected, properties, onSele
         fontStyle="bold"
       />
       <Text
-        text={mode === 'CHARGING' ? `${chargingA.toFixed(1)}A` : ''}
+        text={chargingW > 1 ? `${chargingA.toFixed(1)}A` : ''}
         fontSize={12}
         y={5}
         width={50}
         offsetX={25}
         align="center"
-        fill={mode === 'CHARGING' ? '#064e3b' : '#6B7280'}
+        fill={chargingW > 1 ? '#064e3b' : '#6B7280'}
         fontStyle="bold"
         listening={false}
       />

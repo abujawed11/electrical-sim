@@ -489,6 +489,24 @@ export const evaluateSolar = (components, wires, deviceLoads, dtHours, sunIntens
         updatesMap.set(batId, { ...prev, flowW: flowW + watts });
     };
 
+    // Precompute DC load demand from solar inverters (external battery systems).
+    // MPPT uses this to avoid showing "CHARGING" when batteries are full and there is no load,
+    // while still allowing PV to support real DC loads when present.
+    const solarInverterDcDemands = components
+        .filter(c => c.type === COMPONENT_TYPES.SOLAR_INVERTER && c.properties.enabled)
+        .map(inv => {
+            const invBatteryIds = connectedBatteryIdsAt(inv.id, 'BAT_POS', 'BAT_NEG');
+            if (invBatteryIds.length === 0) return { invId: inv.id, invBatteryIds, dcDemandW: 0 };
+
+            const loadP = Number(deviceLoads?.[inv.id]?.P || 0);
+            const loadS = Number(deviceLoads?.[inv.id]?.S || 0);
+            if (loadP <= 0 && loadS <= 0) return { invId: inv.id, invBatteryIds, dcDemandW: 0 };
+
+            const invEff = Number(inv.properties.efficiency ?? 0.9);
+            const dcDemandW = Math.max(0, loadP / Math.max(0.01, invEff));
+            return { invId: inv.id, invBatteryIds, dcDemandW };
+        });
+
     // -----------------------------
     // 3) PV -> MPPT -> Battery charging
     // -----------------------------
@@ -581,7 +599,54 @@ export const evaluateSolar = (components, wires, deviceLoads, dtHours, sunIntens
 
         const ratingA = Number(mppt.properties.ratingA ?? 40);
         const maxChargeW = Math.max(0, ratingA * avgV);
-        const chargeW = Math.min(pvToDcW, maxChargeW);
+        const chargeWRaw = Math.min(pvToDcW, maxChargeW);
+
+        // Average SOC across connected batteries (0..1)
+        const socPcts = batteryIds.map(bid => {
+            const b = components.find(c => c.id === bid);
+            const capAh = Math.max(1e-6, Number(b?.properties?.capacityAh ?? 0));
+            const socAh = Number(b?.properties?.socAh ?? capAh);
+            if (!Number.isFinite(capAh) || capAh <= 0) return 1;
+            const pct = socAh / capAh;
+            return Math.max(0, Math.min(1, pct));
+        });
+        const avgSocPct = socPcts.length ? (socPcts.reduce((a, b) => a + b, 0) / socPcts.length) : 1;
+
+        // Detect meaningful DC load on this battery network (currently: solar inverters wired to these batteries)
+        const batterySet = new Set(batteryIds);
+        const dcLoadW = solarInverterDcDemands.reduce((sum, d) => {
+            if (d.dcDemandW <= 0) return sum;
+            const sharesBattery = d.invBatteryIds.some(id => batterySet.has(id));
+            return sharesBattery ? (sum + d.dcDemandW) : sum;
+        }, 0);
+
+        // Simple MPPT charge stages + tapering based on SOC.
+        const lerp = (a, b, t) => a + (b - a) * Math.max(0, Math.min(1, t));
+
+        let mode = 'BULK';
+        let stageFactor = 1.0;
+        if (avgSocPct < 0.80) {
+            mode = 'BULK';
+            stageFactor = 1.0;
+        } else if (avgSocPct < 0.95) {
+            mode = 'ABSORB';
+            stageFactor = lerp(1.0, 0.3, (avgSocPct - 0.80) / 0.15);
+        } else {
+            mode = 'FLOAT';
+            stageFactor = lerp(0.3, 0.05, (avgSocPct - 0.95) / 0.05);
+        }
+
+        const taperedChargeW = Math.max(0, chargeWRaw * stageFactor);
+        const loadSupportW = Math.max(0, Math.min(chargeWRaw, dcLoadW)); // allow PV to cover real DC load even if SOC is high
+
+        let chargeW = Math.max(taperedChargeW, loadSupportW);
+
+        // Battery is full and there is no meaningful load => stop charging and show FULL (not CHARGING).
+        if (avgSocPct >= 0.995 && dcLoadW <= 5) {
+            mode = 'FULL';
+            chargeW = 0;
+        }
+
         const chargeA = avgV > 0 ? (chargeW / avgV) : 0;
 
         const caps = batteryIds.map(bid => {
@@ -592,10 +657,12 @@ export const evaluateSolar = (components, wires, deviceLoads, dtHours, sunIntens
 
         const totalCap = caps.reduce((s, x) => s + x.cap, 0);
 
-        caps.forEach(({ bid, cap }) => {
-            const portion = cap / totalCap;
-            addBatteryFlow(bid, chargeW * portion);
-        });
+        if (chargeW > 0) {
+            caps.forEach(({ bid, cap }) => {
+                const portion = cap / totalCap;
+                addBatteryFlow(bid, chargeW * portion);
+            });
+        }
 
         if (DEBUG_SOLAR && chargeW > 1) {
             const posStart = panelPosNodes.find(p => hasClosedDcPath(dcPosGraph, p, pvPosNode));
@@ -620,6 +687,9 @@ export const evaluateSolar = (components, wires, deviceLoads, dtHours, sunIntens
                 pvInputW: pvAvailableW,
                 chargingW: chargeW,
                 chargingA: chargeA,
+                mode,
+                avgSocPct,
+                dcLoadW,
                 pvPosConnected,
                 pvNegConnected,
                 mcbStates,
@@ -627,6 +697,11 @@ export const evaluateSolar = (components, wires, deviceLoads, dtHours, sunIntens
         }
 
         // Now set charging status
+        const isCharging =
+            chargeW > 1 &&
+            mode !== 'FULL' &&
+            !(mode === 'FLOAT' && chargeW < 5);
+
         pushUpdate(mppt.id, {
             pvInputW: pvAvailableW,
             inputPowerW: pvAvailableW, // legacy/alias used by some UI
@@ -635,9 +710,11 @@ export const evaluateSolar = (components, wires, deviceLoads, dtHours, sunIntens
             avgBatteryV: avgV,
             mpptLimitW: maxChargeW,
             efficiencyUsed,
-            isCharging: chargeW > 1,
-            mode: chargeW > 1 ? 'CHARGING' : 'IDLE',
-            lastTickReason: chargeW > 1 ? '' : 'ZERO_CHARGE',
+            isCharging,
+            mode,
+            lastTickReason:
+                mode === 'FULL' ? 'BAT_FULL_NO_LOAD' :
+                (chargeW <= 0 ? 'ZERO_CHARGE' : ''),
         });
     });
 
