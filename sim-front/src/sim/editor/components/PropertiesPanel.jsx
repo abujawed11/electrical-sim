@@ -359,21 +359,39 @@ export const PropertiesPanel = () => {
                    <label className="text-xs text-gray-400 block">Capacity (Ah)</label>
                    <input type="number" min="0" value={selectedComponent.properties.capacityAh} onChange={(e) => handlePropChange('capacityAh', parseFloat(e.target.value))} className="w-full bg-gray-900 border border-gray-600 rounded px-2 py-1 text-white"/>
                </div>
+               <div className="space-y-1">
+                   <label className="text-xs text-gray-400 block">State of Charge (%)</label>
+                   <input
+                       type="number"
+                       min="0"
+                       max="100"
+                       value={Math.round(((selectedComponent.properties.socAh || 0) / Math.max(1e-6, (selectedComponent.properties.capacityAh || 0))) * 100)}
+                       onChange={(e) => {
+                           const capAh = Number(selectedComponent.properties.capacityAh || 0);
+                           const pct = Math.max(0, Math.min(100, Number(e.target.value) || 0));
+                           handlePropChange('socAh', capAh * (pct / 100));
+                       }}
+                       className="w-full bg-gray-900 border border-gray-600 rounded px-2 py-1 text-white"
+                   />
+               </div>
                <div className="p-2 bg-gray-900 rounded border border-gray-700">
                    <div className="flex justify-between items-center mb-1">
-                       <span className="text-gray-400 text-xs">State of Charge</span>
-                       <button onClick={() => handlePropChange('socAh', selectedComponent.properties.capacityAh)} className="text-[10px] bg-gray-700 px-1 rounded text-blue-300 hover:bg-gray-600">RESET</button>
+                        <span className="text-gray-400 text-xs">State of Charge</span>
+                        <button onClick={() => handlePropChange('socAh', selectedComponent.properties.capacityAh)} className="text-[10px] bg-gray-700 px-1 rounded text-blue-300 hover:bg-gray-600">RESET</button>
                    </div>
                    <div className="w-full bg-gray-800 h-2 rounded overflow-hidden">
-                       <div className="h-full bg-green-500" style={{ width: `${Math.min(100, (selectedComponent.properties.socAh / selectedComponent.properties.capacityAh)*100)}%` }} />
+                        <div className="h-full bg-green-500" style={{ width: `${Math.min(100, (selectedComponent.properties.socAh / selectedComponent.properties.capacityAh)*100)}%` }} />
                    </div>
                    <div className="flex justify-between mt-1">
-                       <span className="text-xs text-gray-400">{Math.round(selectedComponent.properties.socAh)} Ah</span>
-                       <span className="text-xs text-white font-mono">{selectedComponent.properties.terminalVoltage ? selectedComponent.properties.terminalVoltage.toFixed(2) + 'V' : ''}</span>
+                        <span className="text-xs text-gray-400">{Math.round(selectedComponent.properties.socAh)} Ah</span>
+                        <span className="text-xs text-white font-mono">{selectedComponent.properties.terminalVoltage ? selectedComponent.properties.terminalVoltage.toFixed(2) + 'V' : ''}</span>
                    </div>
-               </div>
-            </div>
-        )}
+                   <div className="mt-1 text-xs text-gray-500">
+                       {selectedComponent.properties.isCharging ? 'CHARGING' : 'IDLE'}
+                   </div>
+                </div>
+             </div>
+         )}
 
         {/* Solar Controller Properties */}
         {selectedComponent.type === COMPONENT_TYPES.SOLAR_CONTROLLER && (

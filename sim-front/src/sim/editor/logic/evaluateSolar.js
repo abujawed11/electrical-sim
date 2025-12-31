@@ -744,6 +744,9 @@ export const evaluateSolar = (components, wires, deviceLoads, dtHours, sunIntens
     components.forEach(comp => {
         if (comp.type !== COMPONENT_TYPES.BATTERY) return;
 
+        // Reset computed flags each tick (prevents sticky CHARGING on batteries)
+        pushUpdate(comp.id, { isCharging: false });
+
         const pending = updatesMap.get(comp.id);
         const flowW = pending?.flowW || 0;
         if (!flowW || !Number.isFinite(flowW) || dtHours <= 0) return;
@@ -767,6 +770,7 @@ export const evaluateSolar = (components, wires, deviceLoads, dtHours, sunIntens
         pushUpdate(comp.id, {
             socAh: newAh,
             terminalVoltage: terminalV,
+            isCharging: flowW > 1 && newAh < capAh - 1e-6,
         });
 
         // cleanup accumulator

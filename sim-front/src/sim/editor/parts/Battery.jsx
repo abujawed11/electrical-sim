@@ -11,7 +11,10 @@ export const Battery = ({ id, type, x, y, isSelected, properties, onSelect, onDr
   const simulationState = useEditorStore((state) => state.simulationState);
 
   // SOC Visualization
-  const socPct = (properties.socAh / properties.capacityAh) * 100;
+  const capAh = Math.max(1e-6, Number(properties.capacityAh || 0));
+  const socAh = Number(properties.socAh || 0);
+  const socPct = (socAh / capAh) * 100;
+  const isCharging = Boolean(properties.isCharging);
   
   return (
     <Group
@@ -56,6 +59,19 @@ export const Battery = ({ id, type, x, y, isSelected, properties, onSelect, onDr
       {/* SOC Bar */}
       <Rect x={-20} y={0} width={40} height={10} stroke="#4b5563" strokeWidth={1} />
       <Rect x={-19} y={1} width={38 * (socPct/100)} height={8} fill={socPct > 20 ? "#10b981" : "#ef4444"} />
+
+      {/* Charging / SOC text */}
+      <Text
+        text={isCharging ? "CHARGING" : `${Math.round(socPct)}%`}
+        fontSize={8}
+        y={-12}
+        width={60}
+        offsetX={30}
+        align="center"
+        fill={isCharging ? "#34d399" : "#D1D5DB"}
+        fontStyle={isCharging ? "bold" : "normal"}
+        listening={false}
+      />
 
       {/* Label */}
       <Text

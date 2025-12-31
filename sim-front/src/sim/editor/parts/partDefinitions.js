@@ -469,6 +469,7 @@ export const PART_DEFINITIONS = {
       capacityAh: 150,
       socAh: 150, // State of Charge
       soh: 100, // State of Health
+      isCharging: false,
     },
     terminals: [
       { id: 'POS', kind: TERMINAL_KINDS.DC_POS, relX: -20, relY: -30, label: '+' },
