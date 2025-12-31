@@ -43,7 +43,7 @@ export const evaluateSolar = (components, wires, deviceLoads, dtHours, sunIntens
         const fromTerm = fromDef.terminals.find(t => t.id === w.from.terminalId);
         const toTerm = toDef.terminals.find(t => t.id === w.to.terminalId);
 
-        const isDC = (k) => k === TERMINAL_KINDS.DC_POS || k === TERMINAL_KINDS.DC_NEG;
+        const isDC = (k) => k === TERMINAL_KINDS.DC_POS || k === TERMINAL_KINDS.DC_NEG || k === TERMINAL_KINDS.GENERIC;
         
         if (fromTerm && toTerm && (isDC(fromTerm.kind) || isDC(toTerm.kind))) {
              addEdge(`${w.from.compId}:${w.from.terminalId}`, `${w.to.compId}:${w.to.terminalId}`);
@@ -67,6 +67,13 @@ export const evaluateSolar = (components, wires, deviceLoads, dtHours, sunIntens
         
         // Find connected Batteries on BAT_POS / BAT_NEG
         const batteryIds = findConnectedBatteries(mppt.id, 'BAT_POS', dcGraph, components);
+        
+        // DEBUG: Trace Solar State
+        if (batteryIds.length > 0 || pvPowerW > 0) {
+             console.log(`[SOLAR] MPPT ${mppt.id}: PV=${Math.round(pvPowerW)}W, BatCount=${batteryIds.length}`);
+        } else {
+             // console.log(`[SOLAR] MPPT ${mppt.id}: No PV or No Battery`);
+        }
         
         let chargingCurrent = 0;
         let isCharging = false;
@@ -265,7 +272,9 @@ function findConnectedGeneration(startCompId, terminalId, graph, components, sun
         const comp = components.find(c => c.id === cId);
         
         if (comp && comp.type === COMPONENT_TYPES.SOLAR_PANEL && comp.properties.enabled) {
-            totalW += (comp.properties.powerW || 0) * sunIntensity;
+            const p = (comp.properties.powerW || 0) * sunIntensity;
+            totalW += p;
+            // console.log(`[SOLAR] Found Panel ${cId}: ${p}W`);
         }
         
         // Traverse Neighbors

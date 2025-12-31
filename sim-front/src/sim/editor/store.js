@@ -6,6 +6,7 @@ import { evaluateNetwork } from './logic/evaluateNetwork';
 import { evaluateFaults } from './logic/evaluateFaults';
 import { evaluateLoads } from './logic/evaluateLoads';
 import { evaluateAutoChangeover } from './logic/evaluateAutoChangeover';
+import { evaluateSolar } from './logic/evaluateSolar';
 import { validateLesson, getLesson, ALL_LESSONS } from './lessons/lessonEngine';
 import { DEFAULT_PQ_CONFIG, DEFAULT_PQ_STATE, updatePowerQuality } from './logic/PowerQualityEngine';
 
@@ -560,10 +561,30 @@ export const useEditorStore = create(
              return c;
           });
 
+          // Per-meter energy accumulation (kWh) based on deviceLoads attribution from evaluateLoads.
+          const { energyKWh, energy3PhaseKWh, energyByMeterKWh, energyBy3PMeterKWh } = get();
+          const nextEnergyByMeterKWh = { ...(energyByMeterKWh || {}) };
+          const nextEnergyBy3PMeterKWh = { ...(energyBy3PMeterKWh || {}) };
+
+          newComponents.forEach((c) => {
+              if (c.type === 'METER') {
+                  const p = simulationState.deviceLoads?.[c.id]?.P || 0;
+                  const prev = nextEnergyByMeterKWh[c.id] ?? 0;
+                  nextEnergyByMeterKWh[c.id] = prev + (p / 1000) * dtHours;
+              }
+              if (c.type === 'METER_3P') {
+                  const p = simulationState.deviceLoads?.[c.id]?.P || 0;
+                  const prev = nextEnergyBy3PMeterKWh[c.id] ?? 0;
+                  nextEnergyBy3PMeterKWh[c.id] = prev + (p / 1000) * dtHours;
+              }
+          });
+
           // State Update
           const newState = {
-              energyKWh: state.energyKWh + deltaKWh,
-              energy3PhaseKWh: state.energy3PhaseKWh + delta3PhaseKWh,
+              energyKWh: energyKWh + deltaKWh,
+              energy3PhaseKWh: energy3PhaseKWh + delta3PhaseKWh,
+              energyByMeterKWh: nextEnergyByMeterKWh,
+              energyBy3PMeterKWh: nextEnergyBy3PMeterKWh,
               lastTickMs: now,
               pqState: newPQState
           };
