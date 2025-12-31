@@ -15,6 +15,7 @@ export const Battery = ({ id, type, x, y, isSelected, properties, onSelect, onDr
   const socAh = Number(properties.socAh || 0);
   const socPct = (socAh / capAh) * 100;
   const isCharging = Boolean(properties.isCharging);
+  const isDischarging = Boolean(properties.isDischarging);
   
   return (
     <Group
@@ -62,14 +63,14 @@ export const Battery = ({ id, type, x, y, isSelected, properties, onSelect, onDr
 
       {/* Charging / SOC text */}
       <Text
-        text={isCharging ? "CHARGING" : `${Math.round(socPct)}%`}
+        text={isCharging ? "CHARGING" : (isDischarging ? "DISCHARGING" : `${Math.round(socPct)}%`)}
         fontSize={8}
         y={-12}
         width={60}
         offsetX={30}
         align="center"
-        fill={isCharging ? "#34d399" : "#D1D5DB"}
-        fontStyle={isCharging ? "bold" : "normal"}
+        fill={isCharging ? "#34d399" : (isDischarging ? "#f59e0b" : "#D1D5DB")}
+        fontStyle={(isCharging || isDischarging) ? "bold" : "normal"}
         listening={false}
       />
 

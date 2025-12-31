@@ -490,6 +490,8 @@ export const PART_DEFINITIONS = {
       socAh: 150, // State of Charge
       soh: 100, // State of Health
       isCharging: false,
+      isDischarging: false,
+      batteryState: 'IDLE',
     },
     terminals: [
       { id: 'POS', kind: TERMINAL_KINDS.DC_POS, relX: -20, relY: -30, label: '+' },

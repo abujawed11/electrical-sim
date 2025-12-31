@@ -382,12 +382,12 @@ export const PropertiesPanel = () => {
                    <div className="w-full bg-gray-800 h-2 rounded overflow-hidden">
                         <div className="h-full bg-green-500" style={{ width: `${Math.min(100, (selectedComponent.properties.socAh / selectedComponent.properties.capacityAh)*100)}%` }} />
                    </div>
-                   <div className="flex justify-between mt-1">
+                    <div className="flex justify-between mt-1">
                         <span className="text-xs text-gray-400">{Math.round(selectedComponent.properties.socAh)} Ah</span>
                         <span className="text-xs text-white font-mono">{selectedComponent.properties.terminalVoltage ? selectedComponent.properties.terminalVoltage.toFixed(2) + 'V' : ''}</span>
-                   </div>
-                   <div className="mt-1 text-xs text-gray-500">
-                       {selectedComponent.properties.isCharging ? 'CHARGING' : 'IDLE'}
+                    </div>
+                    <div className="mt-1 text-xs text-gray-500">
+                       {selectedComponent.properties.isCharging ? 'CHARGING' : (selectedComponent.properties.isDischarging ? 'DISCHARGING' : 'IDLE')}
                    </div>
                 </div>
              </div>
