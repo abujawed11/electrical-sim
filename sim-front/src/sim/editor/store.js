@@ -529,11 +529,25 @@ export const useEditorStore = create(
           const newComponents = components.map(c => {
              // Merge Solar Updates first
              let updatedC = c;
-             if (solarUpdateMap.has(c.id)) {
-                 const ups = solarUpdateMap.get(c.id);
-                 if (ups.enabled !== undefined && ups.enabled !== c.properties.enabled) needReeval = true;
-                 updatedC = { ...c, properties: { ...c.properties, ...ups } };
-             }
+              if (solarUpdateMap.has(c.id)) {
+                  const ups = solarUpdateMap.get(c.id);
+                  if (ups.enabled !== undefined && ups.enabled !== c.properties.enabled) needReeval = true;
+                  if (
+                      c.type === 'SOLAR_INVERTER' &&
+                      ups.canInvert !== undefined &&
+                      ups.canInvert !== c.properties.canInvert
+                  ) {
+                      needReeval = true; // affects evaluateNetwork/evaluateLoads source gating
+                  }
+                  if (
+                      c.type === 'SOLAR_INVERTER' &&
+                      ups.isTripped !== undefined &&
+                      ups.isTripped !== c.properties.isTripped
+                  ) {
+                      needReeval = true; // affects evaluateNetwork/evaluateLoads source gating
+                  }
+                  updatedC = { ...c, properties: { ...c.properties, ...ups } };
+              }
              c = updatedC;
 
              // 2. Standard Inverter Logic (Internal Battery)

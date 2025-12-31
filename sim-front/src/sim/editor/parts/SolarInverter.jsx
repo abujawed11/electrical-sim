@@ -11,52 +11,31 @@ export const SolarInverter = ({ id, type, x, y, isSelected, properties, onSelect
   const simulationState = useEditorStore((state) => state.simulationState);
 
   // Properties updated by evaluateSolar
-  const { 
-      label, 
-      capacityVA, 
-      enabled, 
-      isOverloaded, 
-      isCharging, 
-      status, 
-      isAlarming, 
-      overloadStartTime, 
-      overloadShutdownDelayMs,
-      socWh, // This will be the "Display" SOC from connected batteries
-      batteryVoltage 
+  const {
+    label,
+    enabled,
+    isBypassMode,
+    status,
+    isTripped,
+    overloadActive,
+    overloadTimerSec,
+    isCharging,
+    socPercent,
+    batteryVoltage,
+    loadW,
+    outputW,
+    dcInputW,
   } = properties;
 
-  // We assume a standard 12V 100Ah battery (1200Wh) as a reference if no max is known, 
-  // or we can just try to display socWh if we knew the total capacity.
-  // evaluateSolar should probably provide a 'socPercent' or 'totalCapacityWh' for better display.
-  // For now, let's assume if socWh is provided, it's the current energy.
-  // But wait, without total capacity, a bar is hard.
-  // Let's rely on evaluateSolar to push 'socPercent' if possible, or just raw display.
-  // Actually, standard Inverter has 'batteryWh'. Solar Inverter depends on external.
-  // Let's check if 'socPercent' is in properties (pushed by logic).
-  
-  const socPercent = properties.socPercent ?? 0;
+  const socPercentSafe = Number.isFinite(Number(socPercent)) ? Number(socPercent) : 0;
 
-  // Blinking effect for alarm
-  const [blinkState, setBlinkState] = React.useState(false);
-  const [remainingTime, setRemainingTime] = React.useState(0);
-
-  React.useEffect(() => {
-    if (isAlarming) {
-      const interval = setInterval(() => setBlinkState(prev => !prev), 500);
-      return () => clearInterval(interval);
-    }
-  }, [isAlarming]);
-
-  React.useEffect(() => {
-    if (isAlarming && overloadStartTime) {
-      const interval = setInterval(() => {
-        const elapsed = Date.now() - overloadStartTime;
-        const remaining = Math.max(0, (overloadShutdownDelayMs || 30000) - elapsed);
-        setRemainingTime(Math.ceil(remaining / 1000));
-      }, 100);
-      return () => clearInterval(interval);
-    }
-  }, [isAlarming, overloadStartTime, overloadShutdownDelayMs]);
+  const badgeText = isBypassMode ? 'BYPASS' : (status || 'OFF');
+  const badgeFill =
+    badgeText === 'ON' ? '#10B981' :
+    badgeText === 'OVERLOAD' ? '#F59E0B' :
+    badgeText === 'TRIPPED' ? '#EF4444' :
+    badgeText === 'BYPASS' ? '#3B82F6' :
+    '#64748B';
 
   return (
     <Group
@@ -84,7 +63,7 @@ export const SolarInverter = ({ id, type, x, y, isSelected, properties, onSelect
         width={94}
         height={104}
         fill="#1E293B" // Slightly bluer gray for Solar distinction
-        stroke={isOverloaded ? (isAlarming && blinkState ? "#FCA5A5" : "#EF4444") : "#64748B"}
+        stroke={overloadActive ? "#F59E0B" : (isTripped ? "#EF4444" : "#64748B")}
         strokeWidth={2}
         cornerRadius={6}
         offset={{ x: 47, y: 52 }}
@@ -93,39 +72,6 @@ export const SolarInverter = ({ id, type, x, y, isSelected, properties, onSelect
         shadowOpacity={0.3}
         shadowOffset={{ x: 2, y: 2 }}
       />
-
-      {/* Alarm/Buzzer Indicator */}
-      {isAlarming && (
-        <Group x={40} y={-45}>
-          <Circle
-            x={0}
-            y={0}
-            radius={6}
-            fill={blinkState ? "#EF4444" : "#FCA5A5"}
-            stroke="#DC2626"
-            strokeWidth={1}
-          />
-          <Text
-            text="🔔"
-            fontSize={8}
-            x={-3}
-            y={-3}
-            listening={false}
-          />
-          <Text
-            text={`${remainingTime}s`}
-            fontSize={6}
-            fill={blinkState ? "#FFFFFF" : "#FCA5A5"}
-            fontStyle="bold"
-            x={0}
-            y={8}
-            width={12}
-            offsetX={6}
-            align="center"
-            listening={false}
-          />
-        </Group>
-      )}
 
       {/* Label */}
       <Text
@@ -155,14 +101,14 @@ export const SolarInverter = ({ id, type, x, y, isSelected, properties, onSelect
           <Rect
             x={-34}
             y={1}
-            width={68 * (socPercent / 100)}
+            width={68 * (socPercentSafe / 100)}
             height={8}
-            fill={socPercent > 20 ? "#10B981" : "#EF4444"}
+            fill={socPercentSafe > 20 ? "#10B981" : "#EF4444"}
             cornerRadius={1}
           />
 
           {/* Charging Indicator */}
-          {isCharging && socPercent < 100 && (
+          {isCharging && socPercentSafe < 100 && (
             <Group x={38} y={1}>
               <Line
                 points={[0, 0, -3, 4, -1, 4, -4, 8, 2, 3, 0, 3, 3, 0]}
@@ -208,11 +154,11 @@ export const SolarInverter = ({ id, type, x, y, isSelected, properties, onSelect
             y={0}
             width={50}
             height={12}
-            fill={status === 'Mains (Bypass)' ? '#3B82F6' : '#8B5CF6'}
+            fill={badgeFill}
             cornerRadius={2}
           />
           <Text
-            text={status === 'Mains (Bypass)' ? 'BYPASS' : 'INVERTER'}
+            text={badgeText}
             fontSize={8}
             fontStyle="bold"
             fill="white"
@@ -222,8 +168,46 @@ export const SolarInverter = ({ id, type, x, y, isSelected, properties, onSelect
             offsetX={25}
             align="center"
             listening={false}
-          />
+           />
       </Group>
+
+      {/* Load / Output Summary */}
+      <Text
+        text={`LOAD ${Math.round(loadW || 0)}W`}
+        fontSize={8}
+        fill="#9CA3AF"
+        x={0}
+        y={28}
+        width={94}
+        offsetX={47}
+        align="center"
+        listening={false}
+      />
+      <Text
+        text={`OUT  ${Math.round(outputW || 0)}W`}
+        fontSize={10}
+        fontStyle="bold"
+        fill="#E5E7EB"
+        x={0}
+        y={38}
+        width={94}
+        offsetX={47}
+        align="center"
+        listening={false}
+      />
+      {overloadActive && (
+        <Text
+          text={`${(Number(overloadTimerSec || 0)).toFixed(1)}s`}
+          fontSize={8}
+          fill="#F59E0B"
+          x={0}
+          y={52}
+          width={94}
+          offsetX={47}
+          align="center"
+          listening={false}
+        />
+      )}
 
       {/* Status Indicators */}
       <Group y={35}>
@@ -247,10 +231,10 @@ export const SolarInverter = ({ id, type, x, y, isSelected, properties, onSelect
             x={20}
             y={0}
             radius={3}
-            fill={isOverloaded ? '#EF4444' : '#4B5563'}
+            fill={overloadActive ? '#F59E0B' : (isTripped ? '#EF4444' : '#4B5563')}
           />
           <Text
-            text="OVLD"
+            text={isTripped ? 'TRIP' : (overloadActive ? 'OVLD' : 'OK')}
             fontSize={8}
             fill="#9CA3AF"
             x={20}
@@ -259,7 +243,19 @@ export const SolarInverter = ({ id, type, x, y, isSelected, properties, onSelect
             align="center"
           />
       </Group>
-      
+
+      <Text
+        text={`${Math.round(dcInputW || 0)}W DC`}
+        fontSize={8}
+        fill="#94A3B8"
+        x={0}
+        y={62}
+        width={94}
+        offsetX={47}
+        align="center"
+        listening={false}
+      />
+       
       {/* Terminals */}
       {registryItem.terminals.map((t) => {
         const terminalIdStr = `${id}:${t.id}`;

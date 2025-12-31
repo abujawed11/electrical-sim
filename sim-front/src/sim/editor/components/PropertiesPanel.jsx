@@ -476,6 +476,145 @@ export const PropertiesPanel = () => {
             </div>
         )}
 
+        {/* Solar Inverter Properties (External Battery) */}
+        {selectedComponent.type === COMPONENT_TYPES.SOLAR_INVERTER && (
+            <div className="space-y-3">
+                <div className="flex items-center justify-between p-2 bg-gray-700 rounded">
+                    <span className="text-gray-200 text-sm">Solar Inverter</span>
+                    <button
+                        onClick={() => handlePropChange('enabled', !selectedComponent.properties.enabled)}
+                        className={`px-3 py-1 rounded text-xs font-bold ${
+                            selectedComponent.properties.enabled
+                            ? 'bg-green-600 text-white'
+                            : 'bg-gray-600 text-gray-300'
+                        }`}
+                    >
+                        {selectedComponent.properties.enabled ? 'ON' : 'OFF'}
+                    </button>
+                </div>
+
+                <div className="space-y-1">
+                    <label className="text-xs text-gray-400 block">Bypass Mode</label>
+                    <button
+                        onClick={() => handlePropChange('isBypassMode', !selectedComponent.properties.isBypassMode)}
+                        className={`w-full px-3 py-2 rounded text-xs font-bold border transition-colors ${
+                            selectedComponent.properties.isBypassMode
+                            ? 'bg-blue-700/40 text-blue-200 border-blue-800'
+                            : 'bg-gray-700 text-gray-200 border-gray-600'
+                        }`}
+                    >
+                        {selectedComponent.properties.isBypassMode ? 'BYPASS' : 'INVERTER'}
+                    </button>
+                </div>
+
+                <div className="grid grid-cols-2 gap-2">
+                    <div className="space-y-1">
+                        <label className="text-xs text-gray-400 block">Efficiency</label>
+                        <input
+                            type="number"
+                            min="0.5"
+                            max="1"
+                            step="0.01"
+                            value={selectedComponent.properties.efficiency ?? 0.9}
+                            onChange={(e) => handlePropChange('efficiency', parseFloat(e.target.value))}
+                            className="w-full bg-gray-900 border border-gray-600 rounded px-2 py-1 text-white"
+                        />
+                    </div>
+                    <div className="space-y-1">
+                        <label className="text-xs text-gray-400 block">Rated W</label>
+                        <input
+                            type="number"
+                            min="0"
+                            value={selectedComponent.properties.ratedW ?? 1000}
+                            onChange={(e) => handlePropChange('ratedW', parseFloat(e.target.value))}
+                            className="w-full bg-gray-900 border border-gray-600 rounded px-2 py-1 text-white"
+                        />
+                    </div>
+                </div>
+
+                <div className="grid grid-cols-3 gap-2">
+                    <div className="space-y-1">
+                        <label className="text-xs text-gray-400 block">Surge W</label>
+                        <input
+                            type="number"
+                            min="0"
+                            value={selectedComponent.properties.surgeW ?? 2000}
+                            onChange={(e) => handlePropChange('surgeW', parseFloat(e.target.value))}
+                            className="w-full bg-gray-900 border border-gray-600 rounded px-2 py-1 text-white"
+                        />
+                    </div>
+                    <div className="space-y-1">
+                        <label className="text-xs text-gray-400 block">Surge Sec</label>
+                        <input
+                            type="number"
+                            min="0"
+                            step="0.1"
+                            value={selectedComponent.properties.surgeSec ?? 2}
+                            onChange={(e) => handlePropChange('surgeSec', parseFloat(e.target.value))}
+                            className="w-full bg-gray-900 border border-gray-600 rounded px-2 py-1 text-white"
+                        />
+                    </div>
+                    <div className="space-y-1">
+                        <label className="text-xs text-gray-400 block">Trip Delay Sec</label>
+                        <input
+                            type="number"
+                            min="0"
+                            step="0.1"
+                            value={selectedComponent.properties.overloadDelaySec ?? 1}
+                            onChange={(e) => handlePropChange('overloadDelaySec', parseFloat(e.target.value))}
+                            className="w-full bg-gray-900 border border-gray-600 rounded px-2 py-1 text-white"
+                        />
+                    </div>
+                </div>
+
+                <div className="p-2 bg-gray-900 rounded border border-gray-700">
+                    <div className="flex items-center justify-between mb-2">
+                        <div className="text-gray-400 text-xs uppercase font-bold">Live Metrics</div>
+                        <button
+                            onClick={() => {
+                                handlePropChange('isTripped', false);
+                                handlePropChange('overloadTimerSec', 0);
+                            }}
+                            className="text-[10px] bg-gray-700 px-2 py-1 rounded text-blue-300 hover:bg-gray-600"
+                        >
+                            RESET TRIP
+                        </button>
+                    </div>
+
+                    <div className="grid grid-cols-2 gap-x-3 gap-y-1 text-xs">
+                        <div className="text-gray-400">Status</div>
+                        <div className="text-right font-mono text-gray-200">{selectedComponent.properties.status || 'OFF'}</div>
+
+                        <div className="text-gray-400">Tripped</div>
+                        <div className="text-right font-mono text-gray-200">{selectedComponent.properties.isTripped ? 'YES' : 'NO'}</div>
+
+                        <div className="text-gray-400">Overload</div>
+                        <div className="text-right font-mono text-gray-200">
+                            {selectedComponent.properties.overloadActive ? `${(selectedComponent.properties.overloadTimerSec || 0).toFixed(1)}s` : 'NO'}
+                        </div>
+
+                        <div className="text-gray-400">Can Invert</div>
+                        <div className="text-right font-mono text-gray-200">{selectedComponent.properties.canInvert === false ? 'NO' : 'YES'}</div>
+
+                        <div className="text-gray-400">Load</div>
+                        <div className="text-right font-mono text-yellow-300">{Math.round(selectedComponent.properties.loadW || 0)} W</div>
+
+                        <div className="text-gray-400">Output</div>
+                        <div className="text-right font-mono text-green-300">{Math.round(selectedComponent.properties.outputW || 0)} W</div>
+
+                        <div className="text-gray-400">DC Input</div>
+                        <div className="text-right font-mono text-gray-200">{Math.round(selectedComponent.properties.dcInputW || 0)} W</div>
+
+                        <div className="text-gray-400">Battery V</div>
+                        <div className="text-right font-mono text-gray-200">{(Number(selectedComponent.properties.batteryVoltage || 0)).toFixed(2)} V</div>
+
+                        <div className="text-gray-400">SOC</div>
+                        <div className="text-right font-mono text-gray-200">{(Number(selectedComponent.properties.socPercent || 0)).toFixed(1)}%</div>
+                    </div>
+                </div>
+            </div>
+        )}
+
         {/* Transformer Properties */}
         {selectedComponent.type === COMPONENT_TYPES.TRANSFORMER_3P && (
             <div className="space-y-3">

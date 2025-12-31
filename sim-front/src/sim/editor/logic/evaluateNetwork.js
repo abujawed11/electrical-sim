@@ -1005,6 +1005,8 @@ export const evaluateNetwork = (components, wires, pqStatus, voltageModel) => {
     !c.properties.isBypassMode
 
   ).forEach(inv => {
+    if (inv.properties.isTripped) return;
+    if (inv.type === COMPONENT_TYPES.SOLAR_INVERTER && inv.properties.canInvert === false) return;
     if (!isDcWiredOk(inv)) return; // ✅ core fix for your glowing bulb bug
 
     const src = `${inv.id}:AC_OUT_L`;

@@ -494,16 +494,27 @@ function findUpstreamSources(startNode, graph, components) {
             if (comp.type === COMPONENT_TYPES.SUPPLY && comp.properties.enabled) {
                 hasMains = true;
             }
-            if (
-                (comp.type === COMPONENT_TYPES.INVERTER || comp.type === COMPONENT_TYPES.SOLAR_INVERTER) &&
-                comp.properties.enabled &&
-                !comp.properties.isBypassMode &&
-                comp.properties.socWh > 0 &&
-                termId === 'AC_OUT_L'
-            ) {
-                // Inverter continues to supply power during overload alarm period
-                // It only stops when enabled=false (after shutdown)
-                inverterIds.add(comp.id);
+            // Source detection:
+            // - INVERTER (internal battery): requires socWh > 0
+            // - SOLAR_INVERTER (external battery/PV via evaluateSolar): gate via canInvert (set by solar net-power logic)
+            if (termId === 'AC_OUT_L') {
+                if (
+                    comp.type === COMPONENT_TYPES.INVERTER &&
+                    comp.properties.enabled &&
+                    !comp.properties.isBypassMode &&
+                    comp.properties.socWh > 0
+                ) {
+                    inverterIds.add(comp.id);
+                }
+                if (
+                    comp.type === COMPONENT_TYPES.SOLAR_INVERTER &&
+                    comp.properties.enabled &&
+                    !comp.properties.isBypassMode &&
+                    comp.properties.canInvert !== false &&
+                    comp.properties.isTripped !== true
+                ) {
+                    inverterIds.add(comp.id);
+                }
             }
         }
 

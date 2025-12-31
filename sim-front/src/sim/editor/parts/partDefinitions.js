@@ -245,17 +245,37 @@ export const PART_DEFINITIONS = {
     defaultProperties: {
       label: 'SOL-INV',
       capacityVA: 2000,
-      chargingPowerW: 500, // Mains charging rate
       enabled: true,
-      isOverloaded: false,
-      isCharging: false,
       isBypassMode: false,
-      status: 'Inverter',
-      overloadShutdownDelayMs: 30000,
-      overloadStartTime: 0,
-      isAlarming: false,
+      efficiency: 0.9,
+
+      // Output capability + overload behavior
+      ratedW: 1000,
+      surgeW: 2000,
+      surgeSec: 2,
+      overloadDelaySec: 1,
+
+      // Live state (updated by simulation)
+      status: 'OFF', // ON, OVERLOAD, TRIPPED, OFF, BYPASS
+      isTripped: false,
+      overloadActive: false,
+      overloadTimerSec: 0,
+      canInvert: true, // gated by battery/Solar in evaluateSolar
+
+      loadW: 0,
+      loadA: 0,
+      outputW: 0,
+      outputA: 0,
+      dcInputW: 0,
+      dcInputA: 0,
+      dcLoadW: 0,
+
+      // Battery net state (updated by simulation)
+      isCharging: false,
       // Display props (updated by simulation)
-      socWh: 0, 
+      socWh: 0,
+      socPercent: 0,
+      totalCapacityWh: 0,
       batteryVoltage: 0,
     },
     terminals: [
