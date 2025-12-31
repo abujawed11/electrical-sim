@@ -10,6 +10,16 @@ export const SolarController = ({ id, type, x, y, isSelected, properties, onSele
   const setHoveredTerminal = useEditorStore((state) => state.setHoveredTerminal);
   const simulationState = useEditorStore((state) => state.simulationState);
 
+  const mode = properties.mode || (properties.isCharging ? 'CHARGING' : 'IDLE');
+  const chargingA = Number(properties.chargingA || 0);
+  const pvInputW = Number(properties.pvInputW || properties.inputPowerW || 0);
+
+  const modeColor =
+    mode === 'CHARGING' ? '#10b981' :
+    mode === 'NO_PV' ? '#f59e0b' :
+    mode === 'NO_BATTERY' ? '#f97316' :
+    '#9CA3AF';
+
   return (
     <Group
       id={id}
@@ -54,14 +64,35 @@ export const SolarController = ({ id, type, x, y, isSelected, properties, onSele
         offset={{ x: 25, y: 15 }}
       />
       <Text 
-        text={properties.isCharging ? "CHARGING" : "STANDBY"} 
+        text={mode}
         fontSize={8} 
         y={-5} 
         width={50} 
         offsetX={25} 
         align="center" 
-        fill="#064e3b"
+        fill={modeColor}
         fontStyle="bold"
+      />
+      <Text
+        text={mode === 'CHARGING' ? `${chargingA.toFixed(1)}A` : ''}
+        fontSize={12}
+        y={5}
+        width={50}
+        offsetX={25}
+        align="center"
+        fill={mode === 'CHARGING' ? '#064e3b' : '#6B7280'}
+        fontStyle="bold"
+        listening={false}
+      />
+      <Text
+        text={pvInputW > 0 ? `${Math.round(pvInputW)}W` : ''}
+        fontSize={8}
+        y={18}
+        width={50}
+        offsetX={25}
+        align="center"
+        fill="#065f46"
+        listening={false}
       />
 
       {/* Label */}

@@ -397,26 +397,82 @@ export const PropertiesPanel = () => {
         {selectedComponent.type === COMPONENT_TYPES.SOLAR_CONTROLLER && (
             <div className="space-y-3">
                <div className="space-y-1">
-                   <label className="text-xs text-gray-400 block">Max Current Rating (A)</label>
-                   <input type="number" min="0" value={selectedComponent.properties.ratingA} onChange={(e) => handlePropChange('ratingA', parseFloat(e.target.value))} className="w-full bg-gray-900 border border-gray-600 rounded px-2 py-1 text-white"/>
-               </div>
-               <div className="space-y-1">
-                   <label className="text-xs text-gray-400 block">Efficiency (0.0 - 1.0)</label>
-                   <input type="number" min="0" max="1" step="0.01" value={selectedComponent.properties.efficiency} onChange={(e) => handlePropChange('efficiency', parseFloat(e.target.value))} className="w-full bg-gray-900 border border-gray-600 rounded px-2 py-1 text-white"/>
-               </div>
-               <div className="p-2 bg-gray-900 rounded border border-gray-700">
-                   <div className="text-gray-400 text-xs uppercase font-bold mb-1">Status</div>
-                   <div className="flex justify-between items-center">
-                        <span className={`text-xs ${selectedComponent.properties.isCharging ? 'text-green-400' : 'text-gray-500'}`}>
-                            {selectedComponent.properties.isCharging ? 'CHARGING' : 'STANDBY'}
-                        </span>
-                        {selectedComponent.properties.inputPowerW > 0 && (
-                            <span className="text-yellow-400 font-mono text-sm">
-                                {Math.round(selectedComponent.properties.inputPowerW)} W
-                            </span>
-                        )}
-                   </div>
-               </div>
+                    <label className="text-xs text-gray-400 block">Max Current Rating (A)</label>
+                    <input type="number" min="0" value={selectedComponent.properties.ratingA} onChange={(e) => handlePropChange('ratingA', parseFloat(e.target.value))} className="w-full bg-gray-900 border border-gray-600 rounded px-2 py-1 text-white"/>
+                </div>
+                <div className="space-y-1">
+                    <label className="text-xs text-gray-400 block">Efficiency (0.0 - 1.0)</label>
+                    <input type="number" min="0" max="1" step="0.01" value={selectedComponent.properties.efficiency} onChange={(e) => handlePropChange('efficiency', parseFloat(e.target.value))} className="w-full bg-gray-900 border border-gray-600 rounded px-2 py-1 text-white"/>
+                </div>
+                <div className="space-y-1">
+                    <label className="text-xs text-gray-400 block">Common Negative (PV- ↔ BAT-)</label>
+                    <button
+                        onClick={() => handlePropChange('commonNegative', !selectedComponent.properties.commonNegative)}
+                        className={`w-full px-3 py-2 rounded text-xs font-bold border transition-colors ${
+                            selectedComponent.properties.commonNegative
+                            ? 'bg-green-700/40 text-green-200 border-green-800'
+                            : 'bg-gray-700 text-gray-200 border-gray-600'
+                        }`}
+                    >
+                        {selectedComponent.properties.commonNegative ? 'ENABLED' : 'DISABLED'}
+                    </button>
+                </div>
+                <div className="p-2 bg-gray-900 rounded border border-gray-700">
+                    <div className="text-gray-400 text-xs uppercase font-bold mb-2">Live Metrics</div>
+
+                    <div className="grid grid-cols-2 gap-x-3 gap-y-1 text-xs">
+                        <div className="text-gray-400">Mode</div>
+                        <div className={`text-right font-mono ${selectedComponent.properties.isCharging ? 'text-green-400' : 'text-gray-200'}`}>
+                            {selectedComponent.properties.mode || (selectedComponent.properties.isCharging ? 'CHARGING' : 'IDLE')}
+                        </div>
+
+                        <div className="text-gray-400">PV Input</div>
+                        <div className="text-right font-mono text-yellow-300">
+                            {Math.round(selectedComponent.properties.pvInputW || selectedComponent.properties.inputPowerW || 0)} W
+                        </div>
+
+                        <div className="text-gray-400">Charge Power</div>
+                        <div className="text-right font-mono text-green-300">
+                            {Math.round(selectedComponent.properties.chargingW || 0)} W
+                        </div>
+
+                        <div className="text-gray-400">Charge Current</div>
+                        <div className="text-right font-mono text-green-200">
+                            {(Number(selectedComponent.properties.chargingA || 0)).toFixed(2)} A
+                        </div>
+
+                        <div className="text-gray-400">Avg Battery V</div>
+                        <div className="text-right font-mono text-gray-200">
+                            {(Number(selectedComponent.properties.avgBatteryV || 0)).toFixed(2)} V
+                        </div>
+
+                        <div className="text-gray-400">MPPT Limit</div>
+                        <div className="text-right font-mono text-gray-200">
+                            {Math.round(selectedComponent.properties.mpptLimitW || 0)} W
+                        </div>
+
+                        <div className="text-gray-400">Efficiency Used</div>
+                        <div className="text-right font-mono text-gray-200">
+                            {Math.round((Number(selectedComponent.properties.efficiencyUsed ?? selectedComponent.properties.efficiency ?? 0) * 100))}%
+                        </div>
+
+                        <div className="text-gray-400">Panels</div>
+                        <div className="text-right font-mono text-gray-200">
+                            {Number(selectedComponent.properties.connectedPanels || 0)}
+                        </div>
+
+                        <div className="text-gray-400">Batteries</div>
+                        <div className="text-right font-mono text-gray-200">
+                            {Number(selectedComponent.properties.connectedBatteries || 0)}
+                        </div>
+                    </div>
+
+                    {selectedComponent.properties.lastTickReason && (
+                        <div className="mt-2 text-[10px] text-gray-500 font-mono">
+                            {selectedComponent.properties.lastTickReason}
+                        </div>
+                    )}
+                </div>
             </div>
         )}
 

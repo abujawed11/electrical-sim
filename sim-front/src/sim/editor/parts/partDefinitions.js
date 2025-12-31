@@ -486,8 +486,17 @@ export const PART_DEFINITIONS = {
       enabled: true,
       commonNegative: false,
       isCharging: false,
-      inputPowerW: 0,
+      pvInputW: 0,
+      inputPowerW: 0, // legacy/alias used by some UI
       chargingW: 0,
+      chargingA: 0,
+      avgBatteryV: 0,
+      mpptLimitW: 0,
+      efficiencyUsed: 0.95,
+      connectedPanels: 0,
+      connectedBatteries: 0,
+      mode: 'IDLE',
+      lastTickReason: '',
     },
     terminals: [
       { id: 'PV_POS', kind: TERMINAL_KINDS.DC_POS, relX: -30, relY: -40, label: 'PV+' },

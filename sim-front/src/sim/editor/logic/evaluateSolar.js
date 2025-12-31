@@ -496,15 +496,29 @@ export const evaluateSolar = (components, wires, deviceLoads, dtHours, sunIntens
 
 
     mppts.forEach(mppt => {
-        // Always reset each tick (prevents stuck CHARGING when we early-return for any reason)
+        // Always reset each tick (prevents stuck metrics when we early-return for any reason)
+        // IMPORTANT: UI must be driven by current-tick computed values only.
+        const efficiencyUsed = Math.max(0, Math.min(1, Number(mppt.properties?.efficiency ?? 0.95)));
         pushUpdate(mppt.id, {
             isCharging: false,
             chargingW: 0,
-            inputPowerW: 0,
+            pvInputW: 0,
+            inputPowerW: 0, // legacy/alias used by some UI
+            chargingA: 0,
+            avgBatteryV: 0,
+            mpptLimitW: 0,
+            efficiencyUsed,
+            connectedPanels: 0,
+            connectedBatteries: 0,
+            mode: 'IDLE',
+            lastTickReason: '',
         });
 
         const mpptEnabled = mppt.properties?.enabled !== false;
-        if (!mpptEnabled) return;
+        if (!mpptEnabled) {
+            pushUpdate(mppt.id, { mode: 'IDLE', lastTickReason: 'DISABLED' });
+            return;
+        }
 
         const panelIds = connectedPanelIdsAt(mppt.id, 'PV_POS', 'PV_NEG')
             .filter(pid => {
@@ -513,6 +527,11 @@ export const evaluateSolar = (components, wires, deviceLoads, dtHours, sunIntens
             });
 
         const batteryIds = connectedBatteryIdsAt(mppt.id, 'BAT_POS', 'BAT_NEG');
+
+        pushUpdate(mppt.id, {
+            connectedPanels: panelIds.length,
+            connectedBatteries: batteryIds.length,
+        });
 
         // ✅ Require CLOSED electrical path PV → MPPT
         const pvPosNode = `${mppt.id}:PV_POS`;
@@ -530,9 +549,14 @@ export const evaluateSolar = (components, wires, deviceLoads, dtHours, sunIntens
 
         const pvElectricallyPresent = pvPosConnected && pvNegConnected;
 
-        if (!pvElectricallyPresent || batteryIds.length === 0) {
-            // already reset above
-            return;
+        if (batteryIds.length === 0) {
+            pushUpdate(mppt.id, { mode: 'NO_BATTERY', lastTickReason: 'NO_BATTERY' });
+            return; // already reset above
+        }
+
+        if (!pvElectricallyPresent || panelIds.length === 0) {
+            pushUpdate(mppt.id, { mode: 'NO_PV', lastTickReason: panelIds.length === 0 ? 'NO_PANELS' : 'PV_OPEN' });
+            return; // already reset above
         }
 
         const pvAvailableW = panelIds.reduce((sum, pid) => {
@@ -541,10 +565,12 @@ export const evaluateSolar = (components, wires, deviceLoads, dtHours, sunIntens
             return sum + rated * sunIntensity;
         }, 0);
 
-        if (pvAvailableW <= 0) return;
+        if (pvAvailableW <= 0) {
+            pushUpdate(mppt.id, { mode: 'IDLE', lastTickReason: 'NO_SUN' });
+            return;
+        }
 
-        const eff = Number(mppt.properties.efficiency ?? 0.95);
-        const pvToDcW = pvAvailableW * eff;
+        const pvToDcW = pvAvailableW * efficiencyUsed;
 
         const batVoltages = batteryIds.map(bid => {
             const b = components.find(c => c.id === bid);
@@ -556,6 +582,7 @@ export const evaluateSolar = (components, wires, deviceLoads, dtHours, sunIntens
         const ratingA = Number(mppt.properties.ratingA ?? 40);
         const maxChargeW = Math.max(0, ratingA * avgV);
         const chargeW = Math.min(pvToDcW, maxChargeW);
+        const chargeA = avgV > 0 ? (chargeW / avgV) : 0;
 
         const caps = batteryIds.map(bid => {
             const b = components.find(c => c.id === bid);
@@ -590,8 +617,9 @@ export const evaluateSolar = (components, wires, deviceLoads, dtHours, sunIntens
 
             console.log('[SOLAR][MPPT][CHARGING]', {
                 id: mppt.id,
-                inputPowerW: pvAvailableW,
+                pvInputW: pvAvailableW,
                 chargingW: chargeW,
+                chargingA: chargeA,
                 pvPosConnected,
                 pvNegConnected,
                 mcbStates,
@@ -600,9 +628,16 @@ export const evaluateSolar = (components, wires, deviceLoads, dtHours, sunIntens
 
         // Now set charging status
         pushUpdate(mppt.id, {
-            inputPowerW: pvAvailableW,
+            pvInputW: pvAvailableW,
+            inputPowerW: pvAvailableW, // legacy/alias used by some UI
             chargingW: chargeW,
+            chargingA: chargeA,
+            avgBatteryV: avgV,
+            mpptLimitW: maxChargeW,
+            efficiencyUsed,
             isCharging: chargeW > 1,
+            mode: chargeW > 1 ? 'CHARGING' : 'IDLE',
+            lastTickReason: chargeW > 1 ? '' : 'ZERO_CHARGE',
         });
     });
 
