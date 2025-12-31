@@ -20,10 +20,13 @@ export const SolarInverter = ({ id, type, x, y, isSelected, properties, onSelect
     overloadActive,
     overloadTimerSec,
     isCharging,
+    lowBattWarning,
+    brownoutActive,
     socPercent,
     batteryVoltage,
     loadW,
     outputW,
+    outputV,
     dcInputW,
   } = properties;
 
@@ -34,6 +37,8 @@ export const SolarInverter = ({ id, type, x, y, isSelected, properties, onSelect
     badgeText === 'ON' ? '#10B981' :
     badgeText === 'OVERLOAD' ? '#F59E0B' :
     badgeText === 'TRIPPED' ? '#EF4444' :
+    badgeText === 'LOW_BATT_CUTOFF' ? '#EF4444' :
+    badgeText === 'LOW_BATT_WARN' ? '#F59E0B' :
     badgeText === 'BYPASS' ? '#3B82F6' :
     '#64748B';
 
@@ -209,6 +214,21 @@ export const SolarInverter = ({ id, type, x, y, isSelected, properties, onSelect
         />
       )}
 
+      {brownoutActive && !isTripped && (
+        <Text
+          text="WARN"
+          fontSize={8}
+          fontStyle="bold"
+          fill="#FCD34D"
+          x={0}
+          y={52}
+          width={94}
+          offsetX={47}
+          align="center"
+          listening={false}
+        />
+      )}
+
       {/* Status Indicators */}
       <Group y={35}>
           <Circle
@@ -250,6 +270,17 @@ export const SolarInverter = ({ id, type, x, y, isSelected, properties, onSelect
         fill="#94A3B8"
         x={0}
         y={62}
+        width={94}
+        offsetX={47}
+        align="center"
+        listening={false}
+      />
+      <Text
+        text={outputV > 0 ? `${Math.round(outputV)}V` : '0V'}
+        fontSize={8}
+        fill={outputV > 0 ? "#93C5FD" : "#9CA3AF"}
+        x={0}
+        y={72}
         width={94}
         offsetX={47}
         align="center"

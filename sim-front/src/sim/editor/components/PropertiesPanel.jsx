@@ -426,15 +426,30 @@ export const PropertiesPanel = () => {
                             {selectedComponent.properties.mode || (selectedComponent.properties.isCharging ? 'CHARGING' : 'IDLE')}
                         </div>
 
-                        <div className="text-gray-400">PV Input</div>
-                        <div className="text-right font-mono text-yellow-300">
-                            {Math.round(selectedComponent.properties.pvInputW || selectedComponent.properties.inputPowerW || 0)} W
-                        </div>
+                         <div className="text-gray-400">PV Input</div>
+                         <div className="text-right font-mono text-yellow-300">
+                             {Math.round(selectedComponent.properties.pvInputW || selectedComponent.properties.inputPowerW || 0)} W
+                         </div>
 
-                        <div className="text-gray-400">Charge Power</div>
-                        <div className="text-right font-mono text-green-300">
-                            {Math.round(selectedComponent.properties.chargingW || 0)} W
-                        </div>
+                         <div className="text-gray-400">Bus Load (DC)</div>
+                         <div className="text-right font-mono text-gray-200">
+                             {Math.round(Number(selectedComponent.properties.busDcLoadW || 0))} W
+                         </div>
+
+                         <div className="text-gray-400">Solar Used (DC)</div>
+                         <div className="text-right font-mono text-gray-200">
+                             {Math.round(Number(selectedComponent.properties.busSolarUsedW || 0))} W
+                         </div>
+
+                         <div className="text-gray-400">Net Battery</div>
+                         <div className={`text-right font-mono ${Number(selectedComponent.properties.netBatteryW || 0) >= 0 ? 'text-green-200' : 'text-red-200'}`}>
+                             {Math.round(Number(selectedComponent.properties.netBatteryW || 0))} W
+                         </div>
+
+                         <div className="text-gray-400">Charge Power</div>
+                         <div className="text-right font-mono text-green-300">
+                             {Math.round(selectedComponent.properties.chargingW || 0)} W
+                         </div>
 
                         <div className="text-gray-400">Charge Current</div>
                         <div className="text-right font-mono text-green-200">
@@ -575,7 +590,12 @@ export const PropertiesPanel = () => {
                                 handlePropChange('isTripped', false);
                                 handlePropChange('overloadTimerSec', 0);
                             }}
-                            className="text-[10px] bg-gray-700 px-2 py-1 rounded text-blue-300 hover:bg-gray-600"
+                            disabled={Number(selectedComponent.properties.batteryVoltage || 0) < Number(selectedComponent.properties.lowBattRecoverV || 12.0)}
+                            className={`text-[10px] px-2 py-1 rounded ${
+                                Number(selectedComponent.properties.batteryVoltage || 0) < Number(selectedComponent.properties.lowBattRecoverV || 12.0)
+                                ? 'bg-gray-800 text-gray-500 cursor-not-allowed'
+                                : 'bg-gray-700 text-blue-300 hover:bg-gray-600'
+                            }`}
                         >
                             RESET TRIP
                         </button>
@@ -583,7 +603,12 @@ export const PropertiesPanel = () => {
 
                     <div className="grid grid-cols-2 gap-x-3 gap-y-1 text-xs">
                         <div className="text-gray-400">Status</div>
-                        <div className="text-right font-mono text-gray-200">{selectedComponent.properties.status || 'OFF'}</div>
+                        <div className="text-right font-mono text-gray-200">
+                            {selectedComponent.properties.status || 'OFF'}
+                            {selectedComponent.properties.lowBattWarning && (
+                                <span className="ml-2 text-[10px] text-yellow-300">LOW BATT</span>
+                            )}
+                        </div>
 
                         <div className="text-gray-400">Tripped</div>
                         <div className="text-right font-mono text-gray-200">{selectedComponent.properties.isTripped ? 'YES' : 'NO'}</div>
@@ -593,8 +618,8 @@ export const PropertiesPanel = () => {
                             {selectedComponent.properties.overloadActive ? `${(selectedComponent.properties.overloadTimerSec || 0).toFixed(1)}s` : 'NO'}
                         </div>
 
-                        <div className="text-gray-400">Can Invert</div>
-                        <div className="text-right font-mono text-gray-200">{selectedComponent.properties.canInvert === false ? 'NO' : 'YES'}</div>
+                         <div className="text-gray-400">Can Invert</div>
+                         <div className="text-right font-mono text-gray-200">{selectedComponent.properties.canInvert === true ? 'YES' : 'NO'}</div>
 
                         <div className="text-gray-400">Load</div>
                         <div className="text-right font-mono text-yellow-300">{Math.round(selectedComponent.properties.loadW || 0)} W</div>
@@ -611,6 +636,9 @@ export const PropertiesPanel = () => {
                         <div className="text-gray-400">DC Input</div>
                         <div className="text-right font-mono text-gray-200">{Math.round(selectedComponent.properties.dcInputW || 0)} W</div>
 
+                        <div className="text-gray-400">Output V</div>
+                        <div className="text-right font-mono text-gray-200">{Math.round(selectedComponent.properties.outputV || 0)} V</div>
+
                         <div className="text-gray-400">Battery V</div>
                         <div className="text-right font-mono text-gray-200">{(Number(selectedComponent.properties.batteryVoltage || 0)).toFixed(2)} V</div>
 
@@ -618,8 +646,80 @@ export const PropertiesPanel = () => {
                         <div className="text-right font-mono text-gray-200">{(Number(selectedComponent.properties.socPercent || 0)).toFixed(1)}%</div>
                     </div>
                 </div>
-            </div>
-        )}
+
+                <div className="p-2 bg-gray-900 rounded border border-gray-700">
+                    <div className="text-gray-400 text-xs uppercase font-bold mb-2">Low Battery</div>
+                    <div className="grid grid-cols-3 gap-2">
+                        <div className="space-y-1">
+                            <label className="text-xs text-gray-500 block">Warn (V)</label>
+                            <input
+                                type="number"
+                                step="0.1"
+                                value={selectedComponent.properties.lowBattWarnV ?? 11.2}
+                                onChange={(e) => handlePropChange('lowBattWarnV', parseFloat(e.target.value))}
+                                className="w-full bg-gray-800 border border-gray-600 rounded px-2 py-1 text-white"
+                            />
+                        </div>
+                        <div className="space-y-1">
+                            <label className="text-xs text-gray-500 block">Cutoff (V)</label>
+                            <input
+                                type="number"
+                                step="0.1"
+                                value={selectedComponent.properties.lowBattCutoffV ?? 10.8}
+                                onChange={(e) => handlePropChange('lowBattCutoffV', parseFloat(e.target.value))}
+                                className="w-full bg-gray-800 border border-gray-600 rounded px-2 py-1 text-white"
+                            />
+                        </div>
+                        <div className="space-y-1">
+                            <label className="text-xs text-gray-500 block">Recover (V)</label>
+                            <input
+                                type="number"
+                                step="0.1"
+                                value={selectedComponent.properties.lowBattRecoverV ?? 12.0}
+                                onChange={(e) => handlePropChange('lowBattRecoverV', parseFloat(e.target.value))}
+                                className="w-full bg-gray-800 border border-gray-600 rounded px-2 py-1 text-white"
+                            />
+                        </div>
+                    </div>
+                 <div className="mt-2 text-xs text-gray-500">
+                     {Number(selectedComponent.properties.batteryVoltage || 0) >= Number(selectedComponent.properties.lowBattRecoverV || 12.0)
+                         ? 'Recovered (can reset trip)'
+                         : 'Not recovered yet'}
+                 </div>
+             </div>
+
+             <div className="p-2 bg-gray-900 rounded border border-gray-700">
+                 <div className="text-gray-400 text-xs uppercase font-bold mb-2">SOC Hysteresis</div>
+                 <div className="grid grid-cols-2 gap-2">
+                     <div className="space-y-1">
+                         <label className="text-xs text-gray-500 block">Run Min (%)</label>
+                         <input
+                             type="number"
+                             min="0"
+                             step="0.1"
+                             value={selectedComponent.properties.minSocRunPct ?? 0.5}
+                             onChange={(e) => handlePropChange('minSocRunPct', parseFloat(e.target.value))}
+                             className="w-full bg-gray-800 border border-gray-600 rounded px-2 py-1 text-white"
+                         />
+                     </div>
+                     <div className="space-y-1">
+                         <label className="text-xs text-gray-500 block">Start Min (%)</label>
+                         <input
+                             type="number"
+                             min="0"
+                             step="0.1"
+                             value={selectedComponent.properties.minSocStartPct ?? 1}
+                             onChange={(e) => handlePropChange('minSocStartPct', parseFloat(e.target.value))}
+                             className="w-full bg-gray-800 border border-gray-600 rounded px-2 py-1 text-white"
+                         />
+                     </div>
+                 </div>
+                 <div className="mt-2 text-[10px] text-gray-500">
+                     Prevents rapid inverter ON/OFF cycling at very low battery + low sun.
+                 </div>
+             </div>
+         </div>
+     )}
 
         {/* Transformer Properties */}
         {selectedComponent.type === COMPONENT_TYPES.TRANSFORMER_3P && (

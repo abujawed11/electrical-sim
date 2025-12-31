@@ -255,17 +255,32 @@ export const PART_DEFINITIONS = {
       surgeSec: 2,
       overloadDelaySec: 1,
 
+      // Restart hysteresis (prevents rapid ON/OFF oscillation when battery is nearly empty)
+      // - If the inverter was running, it can keep running down to minSocRunPct.
+      // - If the inverter was OFF, it requires minSocStartPct to start again.
+      minSocRunPct: 0.5,
+      minSocStartPct: 1,
+
+      // Low-battery cutoff (lead-acid-ish 12V defaults)
+      lowBattWarnV: 11.2,
+      lowBattCutoffV: 10.8,
+      lowBattRecoverV: 12.0,
+      lowBattWarning: false,
+      brownoutActive: false,
+      lowBattRecovered: false,
+
       // Live state (updated by simulation)
       status: 'OFF', // ON, OVERLOAD, TRIPPED, OFF, BYPASS
       isTripped: false,
       overloadActive: false,
       overloadTimerSec: 0,
-      canInvert: true, // gated by battery/Solar in evaluateSolar
+      canInvert: false, // gated by battery/Solar in evaluateSolar
 
       loadW: 0,
       loadA: 0,
       outputW: 0,
       outputA: 0,
+      outputV: 0,
       dcInputW: 0,
       dcInputA: 0,
       dcLoadW: 0,
@@ -517,6 +532,9 @@ export const PART_DEFINITIONS = {
       efficiencyUsed: 0.95,
       connectedPanels: 0,
       connectedBatteries: 0,
+      busDcLoadW: 0,
+      busSolarUsedW: 0,
+      netBatteryW: 0,
       mode: 'IDLE',
       lastTickReason: '',
     },

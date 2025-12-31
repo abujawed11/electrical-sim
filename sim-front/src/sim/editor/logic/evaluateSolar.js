@@ -335,6 +335,7 @@ export const evaluateSolar = (components, wires, deviceLoads, dtHours, sunIntens
     };
 
     const dtSec = Math.max(0, Number(dtHours || 0) * 3600);
+    const DEBUG_SOLAR = false;
 
 
     const hasClosedDcPath = (graph, startNode, targetNode) => {
@@ -492,11 +493,14 @@ export const evaluateSolar = (components, wires, deviceLoads, dtHours, sunIntens
             loadA: 0,
             outputW: 0,
             outputA: 0,
+            outputV: 0,
             dcInputW: 0,
             dcInputA: 0,
             dcLoadW: 0,
             overloadActive: false,
             overloadTimerSec: 0,
+            lowBattWarning: false,
+            brownoutActive: false,
             status: 'OFF',
             canInvert: false,
         });
@@ -610,6 +614,7 @@ export const evaluateSolar = (components, wires, deviceLoads, dtHours, sunIntens
             loadA: requestedW / 230,
             outputW,
             outputA,
+            outputV: outputW > 0 ? 230 : 0,
             dcInputW,
             dcInputA,
             dcLoadW: dcInputW,
@@ -650,6 +655,9 @@ export const evaluateSolar = (components, wires, deviceLoads, dtHours, sunIntens
             efficiencyUsed,
             connectedPanels: 0,
             connectedBatteries: 0,
+            busDcLoadW: 0,
+            busSolarUsedW: 0,
+            netBatteryW: 0,
             mode: 'IDLE',
             lastTickReason: '',
         });
@@ -673,7 +681,7 @@ export const evaluateSolar = (components, wires, deviceLoads, dtHours, sunIntens
             connectedBatteries: batteryIds.length,
         });
 
-        // ✅ Require CLOSED electrical path PV → MPPT
+        // Require CLOSED electrical path PV → MPPT
         const pvPosNode = `${mppt.id}:PV_POS`;
         const pvNegNode = `${mppt.id}:PV_NEG`;
 
@@ -724,6 +732,8 @@ export const evaluateSolar = (components, wires, deviceLoads, dtHours, sunIntens
                 pvAvailableW,
                 pvToDcW,
                 pvReason,
+                pvPosConnected,
+                pvNegConnected,
             });
             bus.mppts.push(mppt.id);
         }
@@ -765,7 +775,60 @@ export const evaluateSolar = (components, wires, deviceLoads, dtHours, sunIntens
         const isFull = avgSocPct >= 0.999;
         const isEmpty = avgSocPct <= 0.001;
 
-        const dcLoadW = (bus.inverters || []).reduce((s, inv) => s + Number(inv.dcLoadW || 0), 0);
+        // Decide which inverters on this DC bus can actually invert THIS tick.
+        // IMPORTANT: we must not count "loads" for net-power unless the inverter can invert,
+        // otherwise you get ghost discharge / oscillation when the inverter is OFF (battery low, tripped, bypass, etc).
+        const invDecisionById = new Map(); // invId -> { canInvert, statusForUi, lowBattWarning, recovered, ... }
+
+        (bus.inverters || []).forEach(inv => {
+            const invComp = components.find(c => c.id === inv.invId);
+
+            const prevCanInvert = invComp?.properties?.canInvert === true;
+            const minSocRunPct = Number(invComp?.properties?.minSocRunPct ?? 0.5);
+            const minSocStartPct = Number(invComp?.properties?.minSocStartPct ?? 1);
+            const socThreshold = ((prevCanInvert ? minSocRunPct : minSocStartPct) / 100);
+            const socOk = avgSocPct >= Math.max(0, socThreshold);
+
+            const invIsTripped = Boolean(inv.isTripped);
+            const invStatus = String(inv.status || 'ON');
+            const invEnabledForOutput = !invIsTripped && invStatus !== 'OFF' && invStatus !== 'BYPASS';
+
+            const lowBattWarnV = Number(invComp?.properties?.lowBattWarnV ?? 11.2);
+            const lowBattCutoffV = Number(invComp?.properties?.lowBattCutoffV ?? 10.8);
+            const lowBattRecoverV = Number(invComp?.properties?.lowBattRecoverV ?? 12.0);
+
+            const lowBattWarning = avgBatteryV > 0 && avgBatteryV <= lowBattWarnV;
+            const shouldCutoff = avgBatteryV > 0 && avgBatteryV <= lowBattCutoffV;
+            const recovered = avgBatteryV >= lowBattRecoverV;
+
+            let canInvert = invEnabledForOutput && socOk && !shouldCutoff;
+            let statusForUi = invStatus;
+
+            if (shouldCutoff) {
+                // Hard cutoff: stop output and latch trip until user resets.
+                canInvert = false;
+                statusForUi = 'LOW_BATT_CUTOFF';
+            } else if (!canInvert) {
+                statusForUi = invIsTripped ? 'TRIPPED' : (invStatus === 'BYPASS' ? 'BYPASS' : 'OFF');
+            } else if (lowBattWarning && invStatus === 'ON') {
+                statusForUi = 'LOW_BATT_WARN';
+            }
+
+            invDecisionById.set(inv.invId, {
+                canInvert,
+                statusForUi,
+                lowBattWarning,
+                lowBattWarnV,
+                lowBattCutoffV,
+                lowBattRecoverV,
+                recovered,
+            });
+        });
+
+        const dcLoadW = (bus.inverters || []).reduce((s, inv) => {
+            const canInvert = invDecisionById.get(inv.invId)?.canInvert === true;
+            return s + (canInvert ? Number(inv.dcLoadW || 0) : 0);
+        }, 0);
 
         // MPPT output capability on this bus (PV opportunistically harvested, limited by controller ratingA*V)
         const lerp = (a, b, t) => a + (b - a) * Math.max(0, Math.min(1, t));
@@ -820,29 +883,34 @@ export const evaluateSolar = (components, wires, deviceLoads, dtHours, sunIntens
             });
         }
 
-        // Let solar inverters operate if there's either stored energy OR enough solar to cover some DC demand.
-        const energyAvailable = (totalSocAh > 0.01) || (solarUsedW > 5);
         (bus.inverters || []).forEach(inv => {
-            const invIsTripped = Boolean(inv.isTripped);
-            const invStatus = String(inv.status || 'ON');
-            const invEnabledForOutput = !invIsTripped && invStatus !== 'OFF' && invStatus !== 'BYPASS';
-            const canInvert = energyAvailable && invEnabledForOutput;
+            const decision = invDecisionById.get(inv.invId) || {};
+            const canInvert = decision.canInvert === true;
 
-            // If there's no energy available, this inverter cannot supply output (next tick it should stop being an AC source).
-            if (!canInvert) {
-                pushUpdate(inv.invId, {
-                    canInvert: false,
-                    outputW: 0,
-                    outputA: 0,
-                    dcInputW: 0,
-                    dcInputA: 0,
-                    dcLoadW: 0,
-                    status: invIsTripped ? 'TRIPPED' : (invStatus === 'BYPASS' ? 'BYPASS' : 'OFF'),
-                });
-            }
+            const shouldCutoff = avgBatteryV > 0 && avgBatteryV <= Number(decision.lowBattCutoffV ?? 10.8);
+            const finalIsTripped = Boolean(inv.isTripped) || Boolean(shouldCutoff);
+            const finalCanInvert = canInvert && !finalIsTripped;
+
+            const effectiveOutputW = finalCanInvert ? Number(inv.outputW || 0) : 0;
+            const effectiveDcLoadW = finalCanInvert ? Number(inv.dcLoadW || 0) : 0;
+
             pushUpdate(inv.invId, {
-                canInvert,
-                dcLoadW: canInvert ? Number(inv.dcLoadW || 0) : 0,
+                isTripped: finalIsTripped,
+                canInvert: finalCanInvert,
+
+                // When the inverter cannot invert, its AC OUT must not energize the network.
+                outputV: finalCanInvert ? 230 : 0,
+                outputW: effectiveOutputW,
+                outputA: effectiveOutputW / 230,
+
+                dcLoadW: effectiveDcLoadW,
+                dcInputW: effectiveDcLoadW,
+                dcInputA: effectiveDcLoadW / Math.max(1e-6, avgBatteryV),
+
+                // Only show "load" when we are actually supplying AC.
+                loadW: finalCanInvert ? Number(inv.requestedW || 0) : 0,
+                loadA: finalCanInvert ? (Number(inv.requestedW || 0) / 230) : 0,
+
                 // Display + load-attribution helpers (evaluateLoads uses these)
                 socWh: totalSocWh,
                 socPercent: Math.max(0, Math.min(100, avgSocPct * 100)),
@@ -850,6 +918,13 @@ export const evaluateSolar = (components, wires, deviceLoads, dtHours, sunIntens
                 totalCapacityWh,
                 // Simple indicator: battery is charging on this bus (net power into battery)
                 isCharging: netBatteryW > 1 && avgSocPct < 0.999,
+                lowBattWarning: Boolean(decision.lowBattWarning),
+                brownoutActive: Boolean(decision.lowBattWarning) && finalCanInvert,
+                lowBattRecoverV: Number(decision.lowBattRecoverV ?? 12.0),
+                lowBattCutoffV: Number(decision.lowBattCutoffV ?? 10.8),
+                lowBattWarnV: Number(decision.lowBattWarnV ?? 11.2),
+                lowBattRecovered: Boolean(decision.recovered),
+                status: finalIsTripped && shouldCutoff ? 'LOW_BATT_CUTOFF' : String(decision.statusForUi || 'OFF'),
             });
         });
 
@@ -860,18 +935,32 @@ export const evaluateSolar = (components, wires, deviceLoads, dtHours, sunIntens
             const mpptBatteryChargeW = solarUsedW > 0 ? (batteryChargeWTotal * (mpptSolarUsedW / solarUsedW)) : 0;
             const chargingA = avgBatteryV > 0 ? (mpptBatteryChargeW / avgBatteryV) : 0;
 
-            let mpptMode = mode;
+            const NET_EPS_W = 1;
+            const pvPresent = (m.pvAvailableW || 0) > 0;
+
+            let mpptMode = 'IDLE';
             let lastTickReason = '';
 
-            if ((m.pvAvailableW || 0) <= 0) {
+            if (!pvPresent) {
                 mpptMode = 'NO_PV';
                 lastTickReason = m.pvReason || 'NO_PV';
-            } else if (mode === 'FULL') {
+            } else if (dcLoadW > 5 && netBatteryW < -NET_EPS_W) {
+                // PV is present, but total load exceeds solar. Battery is discharging (net negative).
+                mpptMode = 'LOAD_EXCEEDS_SOLAR';
+                lastTickReason = 'LOAD_EXCEEDS_SOLAR';
+            } else if (dcLoadW > 5 && Math.abs(netBatteryW) <= NET_EPS_W && solarUsedW > 1) {
+                // PV is present and supplying the load, but there's no meaningful net charge into the battery.
+                mpptMode = 'SOLAR_TO_LOAD';
+                lastTickReason = 'SOLAR_TO_LOAD';
+            } else if (isFull && dcLoadW <= 5) {
+                mpptMode = 'FULL';
                 lastTickReason = 'BAT_FULL_NO_LOAD';
-            } else if (mpptBatteryChargeW <= 0) {
-                if (dcLoadW > 5 && mpptSolarUsedW > 1) lastTickReason = 'SOLAR_TO_LOAD';
-                else if (dcLoadW > 5) lastTickReason = 'LOAD_NO_SOLAR';
-                else lastTickReason = 'ZERO_NET';
+            } else if (netBatteryW > NET_EPS_W) {
+                // Net charging state: show charge stage (BULK/ABSORB/FLOAT).
+                mpptMode = mode;
+            } else {
+                mpptMode = 'IDLE';
+                lastTickReason = 'ZERO_NET';
             }
 
             const isCharging =
@@ -879,9 +968,35 @@ export const evaluateSolar = (components, wires, deviceLoads, dtHours, sunIntens
                 mpptMode !== 'FULL' &&
                 !(mpptMode === 'FLOAT' && mpptBatteryChargeW < 5);
 
+            if (DEBUG_SOLAR && isCharging) {
+                const posMcbs = Array.from(reachableIdsByType(dcPosGraph, `${m.id}:PV_POS`, COMPONENT_TYPES.DC_MCB));
+                const negMcbs = Array.from(reachableIdsByType(dcNegGraph, `${m.id}:PV_NEG`, COMPONENT_TYPES.DC_MCB));
+                const mcbIds = Array.from(new Set([...posMcbs, ...negMcbs]));
+                const mcbStates = mcbIds.map(mid => ({
+                    id: mid,
+                    isOn: Boolean(components.find(c => c.id === mid)?.properties?.isOn),
+                }));
+
+                console.log('[SOLAR DEBUG] MPPT charging', {
+                    mpptId: m.id,
+                    mode: mpptMode,
+                    pvInputW: Number(m.pvAvailableW || 0),
+                    chargingW: mpptBatteryChargeW,
+                    chargingA,
+                    pvPosConnected: Boolean(m.pvPosConnected),
+                    pvNegConnected: Boolean(m.pvNegConnected),
+                    dcLoadW,
+                    netBatteryW,
+                    mcbStates,
+                });
+            }
+
             pushUpdate(m.id, {
                 pvInputW: Number(m.pvAvailableW || 0),
                 inputPowerW: Number(m.pvAvailableW || 0), // legacy/alias used by some UI
+                busDcLoadW: dcLoadW,
+                busSolarUsedW: solarUsedW,
+                netBatteryW,
                 chargingW: mpptBatteryChargeW,
                 chargingA,
                 avgBatteryV,
@@ -993,28 +1108,37 @@ export const evaluateSolar = (components, wires, deviceLoads, dtHours, sunIntens
         pushUpdate(comp.id, { isCharging: false, isDischarging: false, batteryState: 'IDLE' });
 
         const pending = updatesMap.get(comp.id);
-        const flowW = pending?.flowW || 0;
-        if (!flowW || !Number.isFinite(flowW) || dtHours <= 0) return;
+        const flowW = Number(pending?.flowW || 0);
 
         const capAh = Number(comp.properties.capacityAh || 100);
         const nominalV = Number(comp.properties.voltage || 12);
         const measuredV = Number(comp.properties.terminalVoltage);
-        // Avoid runaway discharge when a previous tick computed an invalid/negative terminalVoltage.
-        const baseV = (Number.isFinite(measuredV) && measuredV > 1)
+
+        // Always compute voltage from SOC, even when flowW is 0, so voltage never "sticks" from a previous tick.
+        // This is required for correct low-battery cutoff behavior.
+        const prevAh = Number(comp.properties.socAh ?? capAh);
+        const safeCapAh = Math.max(1e-6, capAh);
+        const rInt = Number(comp.properties.rInternal ?? 0.05);
+        const useV = (Number.isFinite(measuredV) && measuredV > 1)
             ? measuredV
             : Math.max(1, (Number.isFinite(nominalV) && nominalV > 0) ? nominalV : 12);
 
-        // Current from power (I = P/V)
-        const currentA = flowW / Math.max(1e-6, baseV);
-        const dAh = currentA * dtHours;
+        let currentA = 0;
+        let newAh = Math.max(0, Math.min(safeCapAh, prevAh));
 
-        const prevAh = Number(comp.properties.socAh ?? capAh);
-        const newAh = Math.max(0, Math.min(capAh, prevAh + dAh));
+        if (Number.isFinite(flowW) && Math.abs(flowW) > 1e-9 && dtHours > 0) {
+            currentA = flowW / Math.max(1e-6, useV);
+            const dAh = currentA * dtHours;
+            newAh = Math.max(0, Math.min(safeCapAh, newAh + dAh));
+        }
 
-        // Simple voltage estimate: resting curve + internal R
-        const socPct = newAh / Math.max(1e-6, capAh);
-        const restingV = 11.5 + (1.3 * socPct);
-        const rInt = Number(comp.properties.rInternal ?? 0.05);
+        // Simple SOC->Voltage approximation (lead-acid-ish) + internal R.
+        // 0%: ~10.5V, 50%: ~12.1V, 100%: ~12.7V.
+        const socPct = newAh / Math.max(1e-6, safeCapAh);
+        const lerp = (a, b, t) => a + (b - a) * Math.max(0, Math.min(1, t));
+        const restingV = socPct < 0.5
+            ? lerp(10.5, 12.1, socPct / 0.5)
+            : lerp(12.1, 12.7, (socPct - 0.5) / 0.5);
         const terminalV = Math.max(0, restingV + currentA * rInt);
 
         const chargingNow = flowW > 1 && newAh < capAh - 1e-6;

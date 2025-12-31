@@ -1006,7 +1006,9 @@ export const evaluateNetwork = (components, wires, pqStatus, voltageModel) => {
 
   ).forEach(inv => {
     if (inv.properties.isTripped) return;
-    if (inv.type === COMPONENT_TYPES.SOLAR_INVERTER && inv.properties.canInvert === false) return;
+    // IMPORTANT: only energize AC from SOLAR_INVERTER when evaluateSolar explicitly says it can invert.
+    if (inv.type === COMPONENT_TYPES.SOLAR_INVERTER && inv.properties.canInvert !== true) return;
+    if (inv.type === COMPONENT_TYPES.INVERTER && Number(inv.properties.socWh || 0) <= 0) return;
     if (!isDcWiredOk(inv)) return; // ✅ core fix for your glowing bulb bug
 
     const src = `${inv.id}:AC_OUT_L`;

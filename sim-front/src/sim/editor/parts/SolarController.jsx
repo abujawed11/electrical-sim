@@ -11,12 +11,18 @@ export const SolarController = ({ id, type, x, y, isSelected, properties, onSele
   const simulationState = useEditorStore((state) => state.simulationState);
 
   const mode = properties.mode || (properties.isCharging ? 'CHARGING' : 'IDLE');
+  const modeLabel =
+    mode === 'SOLAR_TO_LOAD' ? 'PV->LOAD' :
+    mode === 'LOAD_EXCEEDS_SOLAR' ? 'LOAD>PV' :
+    mode;
   const chargingA = Number(properties.chargingA || 0);
   const pvInputW = Number(properties.pvInputW || properties.inputPowerW || 0);
   const chargingW = Number(properties.chargingW || 0);
 
   const modeColor =
     (mode === 'BULK' || mode === 'ABSORB' || mode === 'FLOAT') ? '#10b981' :
+    mode === 'SOLAR_TO_LOAD' ? '#3b82f6' :
+    mode === 'LOAD_EXCEEDS_SOLAR' ? '#ef4444' :
     mode === 'FULL' ? '#9CA3AF' :
     mode === 'NO_PV' ? '#f59e0b' :
     mode === 'NO_BATTERY' ? '#f97316' :
@@ -66,7 +72,7 @@ export const SolarController = ({ id, type, x, y, isSelected, properties, onSele
         offset={{ x: 25, y: 15 }}
       />
       <Text 
-        text={mode}
+        text={modeLabel}
         fontSize={8} 
         y={-5} 
         width={50} 

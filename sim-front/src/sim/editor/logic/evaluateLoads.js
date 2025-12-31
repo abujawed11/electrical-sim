@@ -506,16 +506,16 @@ function findUpstreamSources(startNode, graph, components) {
                 ) {
                     inverterIds.add(comp.id);
                 }
-                if (
-                    comp.type === COMPONENT_TYPES.SOLAR_INVERTER &&
-                    comp.properties.enabled &&
-                    !comp.properties.isBypassMode &&
-                    comp.properties.canInvert !== false &&
-                    comp.properties.isTripped !== true
-                ) {
-                    inverterIds.add(comp.id);
-                }
+            if (
+                comp.type === COMPONENT_TYPES.SOLAR_INVERTER &&
+                comp.properties.enabled &&
+                !comp.properties.isBypassMode &&
+                comp.properties.canInvert === true &&
+                comp.properties.isTripped !== true
+            ) {
+                inverterIds.add(comp.id);
             }
+        }
         }
 
         const neighbors = graph.get(current) || [];
