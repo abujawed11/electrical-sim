@@ -6,6 +6,7 @@ import { evaluateNetwork } from './logic/evaluateNetwork';
 import { evaluateFaults } from './logic/evaluateFaults';
 import { evaluateLoads } from './logic/evaluateLoads';
 import { evaluateAutoChangeover } from './logic/evaluateAutoChangeover';
+import { evaluateSolar } from './logic/evaluateSolar';
 import { validateLesson, getLesson, ALL_LESSONS } from './lessons/lessonEngine';
 import { DEFAULT_PQ_CONFIG, DEFAULT_PQ_STATE, updatePowerQuality } from './logic/PowerQualityEngine';
 
@@ -520,8 +521,22 @@ export const useEditorStore = create(
            // Inverter Logic (Drain & Overload) & Auto Changeover Timers
            let componentsChanged = false;
 
+           // 1. Solar & DC Logic (Runs in parallel with standard Inverter logic)
+           const solarUpdates = evaluateSolar(components, wires, simulationState.deviceLoads, dtHours, get().sunIntensity);
+           const solarUpdateMap = new Map(solarUpdates.map(u => [u.id, u.properties]));
+           if (solarUpdates.length > 0) componentsChanged = true;
+
           const newComponents = components.map(c => {
-             // 1. Inverter Logic
+             // Merge Solar Updates first
+             let updatedC = c;
+             if (solarUpdateMap.has(c.id)) {
+                 const ups = solarUpdateMap.get(c.id);
+                 if (ups.enabled !== undefined && ups.enabled !== c.properties.enabled) needReeval = true;
+                 updatedC = { ...c, properties: { ...c.properties, ...ups } };
+             }
+             c = updatedC;
+
+             // 2. Standard Inverter Logic (Internal Battery)
              if (c.type === 'INVERTER' && c.properties.enabled) {
                  const loadStats = simulationState.deviceLoads?.[c.id];
                  const loadP = loadStats?.P || 0;

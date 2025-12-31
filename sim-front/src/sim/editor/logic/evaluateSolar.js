@@ -108,36 +108,29 @@ export const evaluateSolar = (components, wires, deviceLoads, dtHours, sunIntens
     });
 
     // 3. Inverter Load (Battery -> Inverter)
-    const inverters = components.filter(c => c.type === COMPONENT_TYPES.INVERTER && c.properties.enabled);
+    const inverters = components.filter(c => c.type === COMPONENT_TYPES.SOLAR_INVERTER && c.properties.enabled);
     
     inverters.forEach(inv => {
         const loadP = deviceLoads[inv.id]?.P || 0;
         const loadS = deviceLoads[inv.id]?.S || 0;
         
-        // Find external batteries
+        // Find connected batteries on BAT_POS
         const batteryIds = findConnectedBatteries(inv.id, 'BAT_POS', dcGraph, components);
         
-        let usingExternal = false;
+        let hasBattery = batteryIds.length > 0;
         let totalBatCapacity = 0;
         let totalBatSoc = 0;
-        let systemVoltage = 12; // default
+        let avgVoltage = 0;
 
-        // Logic: 
-        // If External Battery exists -> Use it.
-        // Else -> Use Internal Virtual Battery (Legacy support).
-
-        if (batteryIds.length > 0) {
-            usingExternal = true;
+        if (hasBattery) {
+            let voltSum = 0;
             batteryIds.forEach(bid => {
                 const bat = components.find(c => c.id === bid);
                 totalBatCapacity += bat.properties.capacityAh * bat.properties.voltage; // Wh
                 totalBatSoc += (bat.properties.socAh / bat.properties.capacityAh) * (bat.properties.capacityAh * bat.properties.voltage); // Wh approx
-                systemVoltage = bat.properties.voltage;
+                voltSum += bat.properties.voltage;
             });
-        } else {
-            // Use Internal
-            totalBatCapacity = inv.properties.batteryWh;
-            totalBatSoc = inv.properties.socWh;
+            avgVoltage = voltSum / batteryIds.length;
         }
 
         // Discharge Logic
@@ -150,43 +143,38 @@ export const evaluateSolar = (components, wires, deviceLoads, dtHours, sunIntens
         if (inv.properties.isBypassMode && inv.properties.enabled) {
             // If bypass (mains available), we might charge the battery
             // Charging Rate
-            const chargeRateW = inv.properties.chargingPowerW || 200;
+            const chargeRateW = inv.properties.chargingPowerW || 500;
             // Only charge if not full
-            // Simplified check: < 98%
-            if (totalBatSoc < totalBatCapacity * 0.98) {
+            if (hasBattery && totalBatSoc < totalBatCapacity * 0.98) {
                 dcChargingDraw = -chargeRateW; // Negative draw = Charging
             }
         }
 
         const netDcPower = dcPowerDraw + dcChargingDraw; // Positive = Draining, Negative = Charging
 
-        if (usingExternal) {
+        if (hasBattery) {
             // Apply to external batteries
             const wPerBat = netDcPower / batteryIds.length;
             batteryIds.forEach(bid => {
                 addBatteryFlow(bid, -wPerBat, updatesMap); // Flow IN is positive in addBatteryFlow logic, so invert
             });
             
-            // Update Inverter Display props to mirror battery state
-            // calculate avg voltage
+            // Update Inverter Display props
             addUpdate(inv.id, { 
-                useExternalBattery: true,
-                socWh: totalBatSoc, // Just for display (will drift from actual external if not re-read)
-                // Actually, we should summing the *result* of the batteries after update?
-                // For now, next tick picks it up.
+                socWh: totalBatSoc, // For display
+                batteryVoltage: avgVoltage
             });
         } else {
-            // Update Internal Battery
-            const energyDelta = netDcPower * dtHours; // Wh
-            const newSoc = Math.max(0, Math.min(totalBatCapacity, totalBatSoc - energyDelta));
+            // No Battery -> Inverter shuts down or shows error if not in Bypass?
+            // If no battery, it can't invert. 
             addUpdate(inv.id, {
-                socWh: newSoc,
-                useExternalBattery: false
+                socWh: 0,
+                batteryVoltage: 0
             });
         }
 
         // Handle Overload
-        const capacityVA = inv.properties.capacityVA || 900;
+        const capacityVA = inv.properties.capacityVA || 2000;
         const isOverloaded = loadS > capacityVA;
         let isAlarming = inv.properties.isAlarming || false;
         let overloadStartTime = inv.properties.overloadStartTime || 0;

@@ -240,6 +240,34 @@ export const PART_DEFINITIONS = {
       { id: 'E', kind: TERMINAL_KINDS.EARTH, relX: 0, relY: 0, label: 'E' },
     ],
   },
+  [COMPONENT_TYPES.SOLAR_INVERTER]: {
+    name: 'Solar Inverter (External Batt)',
+    defaultProperties: {
+      label: 'SOL-INV',
+      capacityVA: 2000,
+      chargingPowerW: 500, // Mains charging rate
+      enabled: true,
+      isOverloaded: false,
+      isCharging: false,
+      isBypassMode: false,
+      status: 'Inverter',
+      overloadShutdownDelayMs: 30000,
+      overloadStartTime: 0,
+      isAlarming: false,
+      // Display props (updated by simulation)
+      socWh: 0, 
+      batteryVoltage: 0,
+    },
+    terminals: [
+      { id: 'AC_IN_L', kind: TERMINAL_KINDS.PHASE, relX: -30, relY: -45, label: 'IN-L' },
+      { id: 'AC_IN_N', kind: TERMINAL_KINDS.NEUTRAL, relX: -10, relY: -45, label: 'IN-N' },
+      { id: 'AC_OUT_L', kind: TERMINAL_KINDS.PHASE, relX: 30, relY: 45, label: 'OUT-L' },
+      { id: 'AC_OUT_N', kind: TERMINAL_KINDS.NEUTRAL, relX: 10, relY: 45, label: 'OUT-N' },
+      { id: 'E', kind: TERMINAL_KINDS.EARTH, relX: 0, relY: 0, label: 'E' },
+      { id: 'BAT_POS', kind: TERMINAL_KINDS.DC_POS, relX: -35, relY: 0, label: 'BAT+' },
+      { id: 'BAT_NEG', kind: TERMINAL_KINDS.DC_NEG, relX: 35, relY: 0, label: 'BAT-' },
+    ],
+  },
   [COMPONENT_TYPES.CHANGEOVER]: {
     name: 'Changeover Switch',
     defaultProperties: {

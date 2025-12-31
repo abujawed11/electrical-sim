@@ -15,7 +15,7 @@ export const evaluateAutoChangeover = (components, simulationState) => {
 
   components.forEach(c => {
       // 1. Inverter Internal Transfer Switch Logic
-      if (c.type === COMPONENT_TYPES.INVERTER && c.properties.enabled) {
+      if ((c.type === COMPONENT_TYPES.INVERTER || c.type === COMPONENT_TYPES.SOLAR_INVERTER) && c.properties.enabled) {
           const mainsL = `${c.id}:AC_IN_L`;
           const mainsN = `${c.id}:AC_IN_N`;
           // Check if AC_IN is energized (Mains Present)

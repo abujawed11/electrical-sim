@@ -122,6 +122,13 @@ export const evaluateNetwork = (components, wires, pqStatus, voltageModel) => {
             addEdge(dcNegGraph, `${comp.id}:IN_NEG`, `${comp.id}:OUT_NEG`);
         }
     }
+    else if (comp.type === COMPONENT_TYPES.SOLAR_CONTROLLER) {
+        // MPPT connects PV to Battery internally (logically) but usually they are separate ports.
+        // If we want them to share common potential (common ground), we might connect negatives.
+        // For now, let's keep them isolated unless explicitly common-grounded by user wiring.
+        // Some controllers have common negative.
+        addEdge(dcNegGraph, `${comp.id}:PV_NEG`, `${comp.id}:BAT_NEG`);
+    }
     else if (comp.type === COMPONENT_TYPES.SWITCH) {
       if (comp.properties.isOn) addEdge(conductorGraph, `${comp.id}:IN_L`, `${comp.id}:OUT_L`);
     } 
@@ -177,6 +184,13 @@ export const evaluateNetwork = (components, wires, pqStatus, voltageModel) => {
             addEdge(conductorGraph, `${comp.id}:AC_IN_L`, `${comp.id}:AC_OUT_L`);
             addEdge(neutralGraph, `${comp.id}:AC_IN_N`, `${comp.id}:AC_OUT_N`);
         }
+    }
+    else if (comp.type === COMPONENT_TYPES.SOLAR_INVERTER) {
+        if (comp.properties.isBypassMode) {
+            addEdge(conductorGraph, `${comp.id}:AC_IN_L`, `${comp.id}:AC_OUT_L`);
+            addEdge(neutralGraph, `${comp.id}:AC_IN_N`, `${comp.id}:AC_OUT_N`);
+        }
+        // DC Internal Connection? No, it's a load/source, not a pass-through.
     }
     else if (comp.type === COMPONENT_TYPES.MCB_3P) {
       if (comp.properties.isOn && !comp.properties.isTripped) {
@@ -306,7 +320,7 @@ export const evaluateNetwork = (components, wires, pqStatus, voltageModel) => {
 
   // Inverters
   components.filter(c =>
-      c.type === COMPONENT_TYPES.INVERTER &&
+      (c.type === COMPONENT_TYPES.INVERTER || c.type === COMPONENT_TYPES.SOLAR_INVERTER) &&
       c.properties.enabled &&
       c.properties.socWh > 0 &&
       !c.properties.isBypassMode

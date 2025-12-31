@@ -36,6 +36,7 @@ import { SolarPanel } from './SolarPanel';
 import { SolarController } from './SolarController';
 import { Battery } from './Battery';
 import { DCMCB } from './DCMCB';
+import { SolarInverter } from './SolarInverter';
 
 const COMPONENTS = {
   [COMPONENT_TYPES.SUPPLY]: Supply,
@@ -59,6 +60,7 @@ const COMPONENTS = {
   [COMPONENT_TYPES.HUMAN_BODY]: HumanBody,
   [COMPONENT_TYPES.JUNCTION_BOX]: JunctionBox,
   [COMPONENT_TYPES.INVERTER]: Inverter,
+  [COMPONENT_TYPES.SOLAR_INVERTER]: SolarInverter,
   [COMPONENT_TYPES.CHANGEOVER]: Changeover,
   [COMPONENT_TYPES.SUPPLY_3P]: Supply3P,
   [COMPONENT_TYPES.TRANSFORMER_3P]: Transformer3P,

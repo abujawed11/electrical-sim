@@ -130,7 +130,7 @@ export const evaluateLoads = (components, wires, simulationState, voltages) => {
       else if ((c.type === COMPONENT_TYPES.RCCB || c.type === COMPONENT_TYPES.RCBO) && isClosed) addInternal(phaseGraph, c.id, 'L_OUT', 'L_IN');
       else if (c.type === COMPONENT_TYPES.SWITCH && c.properties.isOn) addInternal(phaseGraph, c.id, 'OUT_L', 'IN_L');
       else if (c.type === COMPONENT_TYPES.METER) addInternal(phaseGraph, c.id, 'OUT_L', 'IN_L');
-      else if (c.type === COMPONENT_TYPES.INVERTER && c.properties.enabled && c.properties.isBypassMode) {
+      else if ((c.type === COMPONENT_TYPES.INVERTER || c.type === COMPONENT_TYPES.SOLAR_INVERTER) && c.properties.enabled && c.properties.isBypassMode) {
           addInternal(phaseGraph, c.id, 'AC_IN_L', 'AC_OUT_L');
       }
       else if (c.type === COMPONENT_TYPES.BUSBAR) {
@@ -495,7 +495,7 @@ function findUpstreamSources(startNode, graph, components) {
                 hasMains = true;
             }
             if (
-                comp.type === COMPONENT_TYPES.INVERTER &&
+                (comp.type === COMPONENT_TYPES.INVERTER || comp.type === COMPONENT_TYPES.SOLAR_INVERTER) &&
                 comp.properties.enabled &&
                 !comp.properties.isBypassMode &&
                 comp.properties.socWh > 0 &&
