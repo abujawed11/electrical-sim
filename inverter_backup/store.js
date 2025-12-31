@@ -39,9 +39,6 @@ export const useEditorStore = create(
       
       mainsVoltage: 230,
 
-      // Environment
-      sunIntensity: 1.0, // 0.0 to 1.0
-
       // Power Quality State
       pqConfig: DEFAULT_PQ_CONFIG,
       pqState: DEFAULT_PQ_STATE,
@@ -430,12 +427,9 @@ export const useEditorStore = create(
       },
 
       setMainsVoltage: (v) => {
-          set({ mainsVoltage: Number(v) });
+          const vv = Number(v);
+          set(state => ({ mainsVoltage: vv, pqConfig: { ...state.pqConfig, baseVoltage: vv } }));
           get()._evaluate();
-      },
-
-      setSunIntensity: (val) => {
-          set({ sunIntensity: Number(val) });
       },
 
       // --- Simulation Control Actions ---
@@ -470,52 +464,85 @@ export const useEditorStore = create(
       },
 
       tickEnergy: (now) => {
-          const { simRunning, lastTickMs, timeScale, simulationState, components, wires, pqConfig, pqState } = get();
+          const { simRunning, lastTickMs, timeScale, simulationState, components, pqConfig, pqState, energyKWh, energy3PhaseKWh, lastPQReevalMs, energyByMeterKWh, energyBy3PMeterKWh } = get();
           if (!simRunning) {
               set({ lastTickMs: now });
               return;
           }
 
           const dtMs = now - lastTickMs;
-          if (dtMs <= 0) return; 
+          if (dtMs <= 0) return;
 
           const dtSec = dtMs / 1000;
           const scaledDtSec = dtSec * timeScale;
           const dtHours = scaledDtSec / 3600;
 
+          // Debug logging for PQ (only log every 5 seconds to reduce spam)
+          if (pqConfig.enabled && pqConfig.outageEnabled && now % 5000 < 200) {
+              console.log('[DEBUG TICK] Time until next outage:', Math.round((pqState.nextOutageCheck - now) / 1000), 'seconds');
+          }
+
           // 1. Update Power Quality
           const newPQState = updatePowerQuality(
-              pqState, 
-              pqConfig, 
-              scaledDtSec, 
-              now, 
+              pqState,
+              pqConfig,
+              scaledDtSec,
+              now,
               simulationState.phaseCurrents || { R:0, Y:0, B:0 }
           );
 
           // Detect meaningful changes to trigger re-eval
           let needReeval = false;
-          
+
+          // Status change (Outage) -> Topology Change -> Re-eval
           if (
               newPQState.phaseStatus.R !== pqState.phaseStatus.R ||
               newPQState.phaseStatus.Y !== pqState.phaseStatus.Y ||
               newPQState.phaseStatus.B !== pqState.phaseStatus.B
           ) {
+              console.log('[DEBUG TICK] ⚡ PHASE STATUS CHANGED - TRIGGERING RE-EVAL!');
+              console.log('[DEBUG TICK] Old:', pqState.phaseStatus);
+              console.log('[DEBUG TICK] New:', newPQState.phaseStatus);
               needReeval = true;
           }
 
-          const vDiff = (p) => Math.abs(newPQState.voltages[p] - pqState.voltages[p]);
-          if (vDiff('R') > 0.5 || vDiff('Y') > 0.5 || vDiff('B') > 0.5) {
-              needReeval = true;
-          }
+           // Voltage change (Brownout) -> Load Calc Change -> Re-eval
+           // Threshold to avoid re-eval on tiny noise
+           const vDiff = (p) => Math.abs(newPQState.voltages[p] - pqState.voltages[p]);
+           if (vDiff('R') > 0.5 || vDiff('Y') > 0.5 || vDiff('B') > 0.5) {
+               needReeval = true;
+           }
 
-          const totalMainsPowerW = simulationState.deviceLoads?.['TOTAL_MAINS']?.P || 0;
+           // Keep physics + UI feeling "live": voltage changes can be small per frame due to smoothing,
+           // so also re-evaluate at a fixed cadence while PQ is enabled.
+           const PQ_REEVAL_INTERVAL_MS = 50;
+           if (pqConfig.enabled && (now - (lastPQReevalMs || 0)) >= PQ_REEVAL_INTERVAL_MS) {
+               needReeval = true;
+           }
+
+           const totalMainsPowerW = simulationState.deviceLoads?.['TOTAL_MAINS']?.P || 0;
 
           // Energy (kWh) = Power (kW) * Time (h)
-          const deltaKWh = (totalMainsPowerW / 1000) * dtHours;
+           const deltaKWh = (totalMainsPowerW / 1000) * dtHours;
 
           // 3-Phase Energy Calculation
           const totalSystemPowerW = simulationState.totalSystemPowerW || 0;
-          const delta3PhaseKWh = (totalSystemPowerW / 1000) * dtHours;
+           const delta3PhaseKWh = (totalSystemPowerW / 1000) * dtHours;
+
+           // Per-meter energy accumulation (based on downstream power attributed in evaluateLoads)
+           const nextEnergyByMeterKWh = { ...(energyByMeterKWh || {}) };
+           const nextEnergyBy3PMeterKWh = { ...(energyBy3PMeterKWh || {}) };
+
+           components.forEach(c => {
+               if (c.type === 'METER') {
+                   const pW = Math.max(0, simulationState.deviceLoads?.[c.id]?.P || 0);
+                   nextEnergyByMeterKWh[c.id] = (nextEnergyByMeterKWh[c.id] || 0) + ((pW / 1000) * dtHours);
+               }
+               if (c.type === 'METER_3P') {
+                   const pW = Math.max(0, simulationState.deviceLoads?.[c.id]?.P || 0);
+                   nextEnergyBy3PMeterKWh[c.id] = (nextEnergyBy3PMeterKWh[c.id] || 0) + ((pW / 1000) * dtHours);
+               }
+           });
 
            // Inverter Logic (Drain & Overload) & Auto Changeover Timers
            let componentsChanged = false;
@@ -629,42 +656,32 @@ export const useEditorStore = create(
              return c;
           });
 
-          // Per-meter energy accumulation (kWh) based on deviceLoads attribution from evaluateLoads.
-          const { energyKWh, energy3PhaseKWh, energyByMeterKWh, energyBy3PMeterKWh } = get();
-          const nextEnergyByMeterKWh = { ...(energyByMeterKWh || {}) };
-          const nextEnergyBy3PMeterKWh = { ...(energyBy3PMeterKWh || {}) };
-
-          newComponents.forEach((c) => {
-              if (c.type === 'METER') {
-                  const p = simulationState.deviceLoads?.[c.id]?.P || 0;
-                  const prev = nextEnergyByMeterKWh[c.id] ?? 0;
-                  nextEnergyByMeterKWh[c.id] = prev + (p / 1000) * dtHours;
-              }
-              if (c.type === 'METER_3P') {
-                  const p = simulationState.deviceLoads?.[c.id]?.P || 0;
-                  const prev = nextEnergyBy3PMeterKWh[c.id] ?? 0;
-                  nextEnergyBy3PMeterKWh[c.id] = prev + (p / 1000) * dtHours;
-              }
-          });
-
           // State Update
-          const newState = {
-              energyKWh: energyKWh + deltaKWh,
-              energy3PhaseKWh: energy3PhaseKWh + delta3PhaseKWh,
-              energyByMeterKWh: nextEnergyByMeterKWh,
-              energyBy3PMeterKWh: nextEnergyBy3PMeterKWh,
-              lastTickMs: now,
-              pqState: newPQState
-          };
+           const newState = {
+               energyKWh: energyKWh + deltaKWh,
+               energy3PhaseKWh: energy3PhaseKWh + delta3PhaseKWh,
+               energyByMeterKWh: nextEnergyByMeterKWh,
+               energyBy3PMeterKWh: nextEnergyBy3PMeterKWh,
+               lastTickMs: now,
+               pqState: newPQState
+           };
+
+           if (needReeval) {
+               newState.lastPQReevalMs = now;
+           }
           
           if (componentsChanged) {
               newState.components = newComponents;
           }
 
           set(newState);
-          
+
           if (needReeval) {
-              get()._evaluate();
+              console.log('[DEBUG TICK] 🔄 Calling _evaluateWithPQ with new PQ state...');
+              // Force immediate re-evaluation with the NEW PQ state
+              // Don't rely on get() which might return stale data due to async set()
+              get()._evaluateWithPQ(newPQState, componentsChanged ? newComponents : components);
+              console.log('[DEBUG TICK] ✅ Re-evaluation complete!');
           }
       },
 

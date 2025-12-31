@@ -10,7 +10,7 @@ import { COMPONENT_TYPES } from '../types';
  */
 export const evaluateAutoChangeover = (components, simulationState) => {
   const updatesList = [];
-  const { livePhaseSet, neutralSet, terminalMeta } = simulationState;
+  const { livePhaseSet, neutralSet } = simulationState;
   const now = Date.now();
 
   components.forEach(c => {
