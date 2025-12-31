@@ -485,10 +485,15 @@ export const PART_DEFINITIONS = {
     defaultProperties: {
       label: 'PV-1',
       powerW: 200, // Rated Power
+      // Electrical model (simple, for PV string discovery)
+      // - Vmpp stays ~stable; Impp scales with sunIntensity.
+      // - If impp is missing, we fall back to powerW / vmpp.
       voc: 22, // Open Circuit Voltage
-      vmp: 18, // Max Power Voltage
+      vmp: 18, // legacy naming
+      vmpp: 18, // Voltage at max power point (V)
       isc: 11, // Short Circuit Current
-      imp: 11, // Max Power Current
+      imp: 11, // legacy naming
+      impp: 11, // Current at max power point (A)
       enabled: true,
     },
     terminals: [
@@ -535,6 +540,10 @@ export const PART_DEFINITIONS = {
       busDcLoadW: 0,
       busSolarUsedW: 0,
       netBatteryW: 0,
+      pvVmppV: 0,
+      pvImppA: 0,
+      pvPmppW: 0,
+      pvStringCount: 0,
       mode: 'IDLE',
       lastTickReason: '',
     },

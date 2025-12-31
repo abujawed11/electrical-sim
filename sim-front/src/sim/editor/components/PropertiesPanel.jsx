@@ -335,18 +335,35 @@ export const PropertiesPanel = () => {
                    <label className="text-xs text-gray-400 block">Rated Power (W)</label>
                    <input type="number" min="0" value={selectedComponent.properties.powerW} onChange={(e) => handlePropChange('powerW', parseFloat(e.target.value))} className="w-full bg-gray-900 border border-gray-600 rounded px-2 py-1 text-white"/>
                </div>
-               <div className="grid grid-cols-2 gap-2">
-                   <div className="space-y-1">
-                       <label className="text-xs text-gray-400 block">Voc (V)</label>
-                       <input type="number" min="0" value={selectedComponent.properties.voc} onChange={(e) => handlePropChange('voc', parseFloat(e.target.value))} className="w-full bg-gray-900 border border-gray-600 rounded px-2 py-1 text-white"/>
-                   </div>
-                   <div className="space-y-1">
-                       <label className="text-xs text-gray-400 block">Vmp (V)</label>
-                       <input type="number" min="0" value={selectedComponent.properties.vmp} onChange={(e) => handlePropChange('vmp', parseFloat(e.target.value))} className="w-full bg-gray-900 border border-gray-600 rounded px-2 py-1 text-white"/>
-                   </div>
-               </div>
-            </div>
-        )}
+                <div className="grid grid-cols-2 gap-2">
+                    <div className="space-y-1">
+                        <label className="text-xs text-gray-400 block">Voc (V)</label>
+                        <input type="number" min="0" value={selectedComponent.properties.voc} onChange={(e) => handlePropChange('voc', parseFloat(e.target.value))} className="w-full bg-gray-900 border border-gray-600 rounded px-2 py-1 text-white"/>
+                    </div>
+                    <div className="space-y-1">
+                        <label className="text-xs text-gray-400 block">Vmpp (V)</label>
+                        <input type="number" min="0" value={selectedComponent.properties.vmpp ?? selectedComponent.properties.vmp} onChange={(e) => handlePropChange('vmpp', parseFloat(e.target.value))} className="w-full bg-gray-900 border border-gray-600 rounded px-2 py-1 text-white"/>
+                    </div>
+                </div>
+                <div className="grid grid-cols-2 gap-2">
+                    <div className="space-y-1">
+                        <label className="text-xs text-gray-400 block">Impp (A)</label>
+                        <input type="number" min="0" step="0.1" value={selectedComponent.properties.impp ?? selectedComponent.properties.imp ?? 0} onChange={(e) => handlePropChange('impp', parseFloat(e.target.value))} className="w-full bg-gray-900 border border-gray-600 rounded px-2 py-1 text-white"/>
+                    </div>
+                    <div className="space-y-1">
+                        <label className="text-xs text-gray-400 block">Impp (auto)</label>
+                        <div className="w-full bg-gray-900 border border-gray-700 rounded px-2 py-2 text-xs text-gray-300 font-mono">
+                            {(() => {
+                                const powerW = Number(selectedComponent.properties.powerW || 0);
+                                const vmpp = Number((selectedComponent.properties.vmpp ?? selectedComponent.properties.vmp) || 0);
+                                const impp = (vmpp > 0) ? (powerW / vmpp) : 0;
+                                return `${impp.toFixed(2)} A (power/vmpp)`;
+                            })()}
+                        </div>
+                    </div>
+                </div>
+             </div>
+         )}
 
         {/* Battery Properties */}
         {selectedComponent.type === COMPONENT_TYPES.BATTERY && (
@@ -429,6 +446,21 @@ export const PropertiesPanel = () => {
                          <div className="text-gray-400">PV Input</div>
                          <div className="text-right font-mono text-yellow-300">
                              {Math.round(selectedComponent.properties.pvInputW || selectedComponent.properties.inputPowerW || 0)} W
+                         </div>
+
+                         <div className="text-gray-400">PV Strings</div>
+                         <div className="text-right font-mono text-gray-200">
+                             {Number(selectedComponent.properties.pvStringCount || 0)}
+                         </div>
+
+                         <div className="text-gray-400">PV Vmpp</div>
+                         <div className="text-right font-mono text-gray-200">
+                             {(Number(selectedComponent.properties.pvVmppV || 0)).toFixed(1)} V
+                         </div>
+
+                         <div className="text-gray-400">PV Impp</div>
+                         <div className="text-right font-mono text-gray-200">
+                             {(Number(selectedComponent.properties.pvImppA || 0)).toFixed(2)} A
                          </div>
 
                          <div className="text-gray-400">Bus Load (DC)</div>

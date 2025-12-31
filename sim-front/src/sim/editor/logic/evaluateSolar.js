@@ -311,6 +311,7 @@
 
 import { COMPONENT_TYPES, TERMINAL_KINDS } from '../types';
 import { PART_DEFINITIONS } from '../parts/partDefinitions';
+import { buildPvGraph, computePvStringsForMppt, computePvFromStrings } from './pvStrings';
 
 /**
  * Evaluates Solar and DC Energy physics.
@@ -336,6 +337,7 @@ export const evaluateSolar = (components, wires, deviceLoads, dtHours, sunIntens
 
     const dtSec = Math.max(0, Number(dtHours || 0) * 3600);
     const DEBUG_SOLAR = false;
+    const DEBUG_PV_STRINGS = false;
 
 
     const hasClosedDcPath = (graph, startNode, targetNode) => {
@@ -478,6 +480,9 @@ export const evaluateSolar = (components, wires, deviceLoads, dtHours, sunIntens
     // 3) Build DC-bus net power (PV - load)
     // -----------------------------
     const busByKey = new Map(); // key -> { batteryIds[], mppts[], inverters[] }
+
+    // PV wiring topology graph (for series/parallel PV strings)
+    const pvGraph = buildPvGraph(components, wires);
 
     // 3a) Inverter DC load demand (external battery systems)
     const solarInverters = components.filter(c => c.type === COMPONENT_TYPES.SOLAR_INVERTER);
@@ -649,6 +654,10 @@ export const evaluateSolar = (components, wires, deviceLoads, dtHours, sunIntens
             chargingW: 0,
             pvInputW: 0,
             inputPowerW: 0, // legacy/alias used by some UI
+            pvVmppV: 0,
+            pvImppA: 0,
+            pvPmppW: 0,
+            pvStringCount: 0,
             chargingA: 0,
             avgBatteryV: 0,
             mpptLimitW: 0,
@@ -668,53 +677,42 @@ export const evaluateSolar = (components, wires, deviceLoads, dtHours, sunIntens
             return;
         }
 
-        const panelIds = connectedPanelIdsAt(mppt.id, 'PV_POS', 'PV_NEG')
-            .filter(pid => {
-                const p = components.find(c => c.id === pid);
-                return p?.properties?.enabled !== false;
-            });
-
         const batteryIds = connectedBatteryIdsAt(mppt.id, 'BAT_POS', 'BAT_NEG');
-
-        pushUpdate(mppt.id, {
-            connectedPanels: panelIds.length,
-            connectedBatteries: batteryIds.length,
-        });
-
-        // Require CLOSED electrical path PV → MPPT
-        const pvPosNode = `${mppt.id}:PV_POS`;
-        const pvNegNode = `${mppt.id}:PV_NEG`;
-
-        const panelPosNodes = panelIds.map(pid => `${pid}:POS`);
-        const panelNegNodes = panelIds.map(pid => `${pid}:NEG`);
-
-        const pvPosConnected = panelPosNodes.some(p =>
-            hasClosedDcPath(dcPosGraph, p, pvPosNode)
-        );
-        const pvNegConnected = panelNegNodes.some(p =>
-            hasClosedDcPath(dcNegGraph, p, pvNegNode)
-        );
-
-        const pvElectricallyPresent = pvPosConnected && pvNegConnected;
-
         if (batteryIds.length === 0) {
-            pushUpdate(mppt.id, { mode: 'NO_BATTERY', lastTickReason: 'NO_BATTERY' });
+            pushUpdate(mppt.id, { connectedBatteries: 0, mode: 'NO_BATTERY', lastTickReason: 'NO_BATTERY' });
             return; // already reset above
         }
 
-        let pvAvailableW = 0;
+        // PV available power must come from REAL wiring topology (series/parallel strings).
+        const strings = computePvStringsForMppt(pvGraph, components, mppt.id);
+        const pvModel = computePvFromStrings(components, strings, sunIntensity);
+
+        pushUpdate(mppt.id, {
+            connectedPanels: pvModel.connectedPanels.length,
+            connectedBatteries: batteryIds.length,
+            pvVmppV: pvModel.vmppV,
+            pvImppA: pvModel.imppA,
+            pvPmppW: pvModel.pmppW,
+            pvStringCount: pvModel.stringCount,
+        });
+
+        let pvAvailableW = Math.max(0, Number(pvModel.pmppW || 0));
         let pvReason = '';
-        if (panelIds.length === 0) {
+        if (pvModel.connectedPanels.length === 0) {
             pvReason = 'NO_PANELS';
-        } else if (!pvElectricallyPresent) {
+        } else if (pvModel.stringCount === 0) {
             pvReason = 'PV_OPEN';
-        } else {
-            pvAvailableW = panelIds.reduce((sum, pid) => {
-                const p = components.find(c => c.id === pid);
-                const rated = Number(p?.properties?.powerW || 0);
-                return sum + rated * sunIntensity;
-            }, 0);
-            if (pvAvailableW <= 0) pvReason = 'NO_SUN';
+        } else if (pvAvailableW <= 0) {
+            pvReason = 'NO_SUN';
+        }
+
+        if (DEBUG_PV_STRINGS) {
+            console.log('[PV STRINGS]', {
+                mpptId: mppt.id,
+                stringCount: pvModel.stringCount,
+                strings: pvModel.stringDetails,
+                pvAvailableW,
+            });
         }
 
         const pvToDcW = Math.max(0, pvAvailableW * efficiencyUsed);
@@ -732,8 +730,6 @@ export const evaluateSolar = (components, wires, deviceLoads, dtHours, sunIntens
                 pvAvailableW,
                 pvToDcW,
                 pvReason,
-                pvPosConnected,
-                pvNegConnected,
             });
             bus.mppts.push(mppt.id);
         }

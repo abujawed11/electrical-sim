@@ -10,6 +10,10 @@ export const SolarPanel = ({ id, type, x, y, isSelected, properties, onSelect, o
   const setHoveredTerminal = useEditorStore((state) => state.setHoveredTerminal);
   const simulationState = useEditorStore((state) => state.simulationState);
 
+  const powerW = Number(properties.powerW || 0);
+  const vmpp = Number((properties.vmpp ?? properties.vmp) || 0);
+  const impp = Number(properties.impp ?? properties.imp ?? (vmpp > 0 ? (powerW / vmpp) : 0));
+
   return (
     <Group
       id={id}
@@ -66,13 +70,23 @@ export const SolarPanel = ({ id, type, x, y, isSelected, properties, onSelect, o
       />
 
       <Text
-        text={`${properties.powerW}W`}
+        text={`${Math.round(powerW)}W`}
         fontSize={10}
         y={28}
         width={60}
         offsetX={30}
         align="center"
         fill="#FBBF24"
+        listening={false}
+      />
+      <Text
+        text={(vmpp > 0 && impp > 0) ? `${vmpp.toFixed(0)}V ${impp.toFixed(1)}A` : ''}
+        fontSize={8}
+        y={38}
+        width={60}
+        offsetX={30}
+        align="center"
+        fill="#93c5fd"
         listening={false}
       />
 

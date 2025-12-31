@@ -1016,8 +1016,19 @@ export const useEditorStore = create(
         }
 
         if (fromTerm.kind !== toTerm.kind) {
+          // Special-case: allow PV series wiring (SolarPanel POS <-> SolarPanel NEG).
+          // This is required so users can build series strings directly from wiring topology.
+          if (
+              (fromComp.type === 'SOLAR_PANEL' && toComp.type === 'SOLAR_PANEL') &&
+              (
+                  (fromTerm.kind === 'DC_POS' && toTerm.kind === 'DC_NEG') ||
+                  (fromTerm.kind === 'DC_NEG' && toTerm.kind === 'DC_POS')
+              )
+          ) {
+              // allow
+          }
           // Allow GENERIC to connect to LV (already blocked for HV above)
-          if (fromTerm.kind === 'GENERIC' || toTerm.kind === 'GENERIC') {
+          else if (fromTerm.kind === 'GENERIC' || toTerm.kind === 'GENERIC') {
               // GENERIC can connect to anything (that is not HV)
           }
           // Allow specific phases (PHASE_R, PHASE_Y, PHASE_B) to connect to generic PHASE
