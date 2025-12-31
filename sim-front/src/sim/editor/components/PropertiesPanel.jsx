@@ -599,8 +599,14 @@ export const PropertiesPanel = () => {
                         <div className="text-gray-400">Load</div>
                         <div className="text-right font-mono text-yellow-300">{Math.round(selectedComponent.properties.loadW || 0)} W</div>
 
+                        <div className="text-gray-400">Load Current</div>
+                        <div className="text-right font-mono text-yellow-200">{(Number(selectedComponent.properties.loadA || 0)).toFixed(2)} A</div>
+
                         <div className="text-gray-400">Output</div>
                         <div className="text-right font-mono text-green-300">{Math.round(selectedComponent.properties.outputW || 0)} W</div>
+
+                        <div className="text-gray-400">Output Current</div>
+                        <div className="text-right font-mono text-green-200">{(Number(selectedComponent.properties.outputA || 0)).toFixed(2)} A</div>
 
                         <div className="text-gray-400">DC Input</div>
                         <div className="text-right font-mono text-gray-200">{Math.round(selectedComponent.properties.dcInputW || 0)} W</div>
