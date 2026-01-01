@@ -468,10 +468,16 @@ export const evaluateSolar = (components, wires, deviceLoads, dtHours, sunIntens
     };
 
     // Battery flow accumulator (+W = charging, -W = discharging)
-    const addBatteryFlow = (batId, watts) => {
+    // Now also stores current (amps) to properly handle series batteries
+    const addBatteryFlow = (batId, watts, amps) => {
         const prev = updatesMap.get(batId) || {};
         const flowW = prev.flowW || 0;
-        updatesMap.set(batId, { ...prev, flowW: flowW + watts });
+        const flowA = prev.flowA || 0;
+        updatesMap.set(batId, {
+            ...prev,
+            flowW: flowW + watts,
+            flowA: flowA + (amps !== undefined ? amps : 0)
+        });
     };
 
     const batteryKeyFor = (batteryIds) => {
@@ -1041,11 +1047,43 @@ export const evaluateSolar = (components, wires, deviceLoads, dtHours, sunIntens
         if (isEmpty && netBatteryW < 0) netBatteryW = 0;
         if (isFull && netBatteryW > 0) netBatteryW = 0;
 
+        // ═══════════════════════════════════════════════════════════════════════
+        // CRITICAL: Distribute current correctly for series/parallel topology
+        // ═══════════════════════════════════════════════════════════════════════
         if (Math.abs(netBatteryW) > 1e-9) {
-            batStats.forEach(({ bid, capAh }) => {
-                const portion = capAh / Math.max(1e-6, totalCapAh);
-                addBatteryFlow(bid, netBatteryW * portion);
-            });
+            const batteryStrings = bus.batteryStrings || [];
+
+            if (batteryStrings.length > 0) {
+                // Calculate total bus current from net power and bus voltage
+                const I_bus = avgBatteryV > 0 ? (netBatteryW / avgBatteryV) : 0;
+
+                // Current splits EQUALLY among parallel strings
+                const I_per_string = I_bus / batteryStrings.length;
+
+                // Apply SAME current to all batteries in each series string
+                batteryStrings.forEach(stringBatteryIds => {
+                    stringBatteryIds.forEach(bid => {
+                        const batStat = batStats.find(b => b.bid === bid);
+                        const V_bat = batStat ? batStat.v : 12;
+
+                        // Power varies by battery voltage, current is constant in series
+                        const P_bat = I_per_string * V_bat;
+
+                        // Store both power and current (current is the physical constraint)
+                        addBatteryFlow(bid, P_bat, I_per_string);
+                    });
+                });
+            } else {
+                // Fallback: treat all batteries as parallel (old behavior)
+                // This handles edge cases where string detection fails
+                batStats.forEach(({ bid, capAh }) => {
+                    const portion = capAh / Math.max(1e-6, totalCapAh);
+                    const P_bat = netBatteryW * portion;
+                    const V_bat = batStats.find(b => b.bid === bid)?.v || 12;
+                    const I_bat = V_bat > 0 ? (P_bat / V_bat) : 0;
+                    addBatteryFlow(bid, P_bat, I_bat);
+                });
+            }
         }
 
         (bus.inverters || []).forEach(inv => {
@@ -1274,6 +1312,7 @@ export const evaluateSolar = (components, wires, deviceLoads, dtHours, sunIntens
 
         const pending = updatesMap.get(comp.id);
         const flowW = Number(pending?.flowW || 0);
+        const flowA = Number(pending?.flowA || 0);  // Current set by bus-level topology
 
         const capAh = Number(comp.properties.capacityAh || 100);
         const nominalV = Number(comp.properties.voltage || 12);
@@ -1291,7 +1330,17 @@ export const evaluateSolar = (components, wires, deviceLoads, dtHours, sunIntens
         let currentA = 0;
         let newAh = Math.max(0, Math.min(safeCapAh, prevAh));
 
-        if (Number.isFinite(flowW) && Math.abs(flowW) > 1e-9 && dtHours > 0) {
+        // ═══════════════════════════════════════════════════════════════════════
+        // CRITICAL: Use flowA (current) directly for series batteries
+        // Current is the physical constraint in series, NOT power
+        // ═══════════════════════════════════════════════════════════════════════
+        if (Number.isFinite(flowA) && Math.abs(flowA) > 1e-9 && dtHours > 0) {
+            // Use the current that was calculated from series/parallel topology
+            currentA = flowA;
+            const dAh = currentA * dtHours;
+            newAh = Math.max(0, Math.min(safeCapAh, newAh + dAh));
+        } else if (Number.isFinite(flowW) && Math.abs(flowW) > 1e-9 && dtHours > 0) {
+            // Fallback: if no flowA stored, calculate from power (old behavior)
             currentA = flowW / Math.max(1e-6, useV);
             const dAh = currentA * dtHours;
             newAh = Math.max(0, Math.min(safeCapAh, newAh + dAh));
@@ -1317,8 +1366,8 @@ export const evaluateSolar = (components, wires, deviceLoads, dtHours, sunIntens
             batteryState: chargingNow ? 'CHARGING' : (dischargingNow ? 'DISCHARGING' : 'IDLE'),
         });
 
-        // cleanup accumulator
-        const { flowW: _ignore, ...rest } = updatesMap.get(comp.id) || {};
+        // cleanup accumulator (remove flowW and flowA)
+        const { flowW: _ignoreW, flowA: _ignoreA, ...rest } = updatesMap.get(comp.id) || {};
         updatesMap.set(comp.id, rest);
     });
 
