@@ -614,10 +614,10 @@ export const PropertiesPanel = () => {
                     </div>
                 </div>
 
-                <div className="p-2 bg-gray-900 rounded border border-gray-700">
-                    <div className="flex items-center justify-between mb-2">
-                        <div className="text-gray-400 text-xs uppercase font-bold">Live Metrics</div>
-                        <button
+                 <div className="p-2 bg-gray-900 rounded border border-gray-700">
+                     <div className="flex items-center justify-between mb-2">
+                         <div className="text-gray-400 text-xs uppercase font-bold">Live Metrics</div>
+                         <button
                             onClick={() => {
                                 handlePropChange('isTripped', false);
                                 handlePropChange('overloadTimerSec', 0);
@@ -631,14 +631,59 @@ export const PropertiesPanel = () => {
                         >
                             RESET TRIP
                         </button>
-                    </div>
+                     </div>
+ 
+                     <div className="grid grid-cols-2 gap-x-3 gap-y-1 text-xs">
+                         {(() => {
+                             const status = String(selectedComponent.properties.status || 'OFF');
+                             const isOffOrTripped =
+                                 selectedComponent.properties.enabled !== true ||
+                                 Boolean(selectedComponent.properties.isTripped) ||
+                                 status === 'OFF' ||
+                                 status === 'TRIPPED';
 
-                    <div className="grid grid-cols-2 gap-x-3 gap-y-1 text-xs">
-                        <div className="text-gray-400">Status</div>
-                        <div className="text-right font-mono text-gray-200">
-                            {selectedComponent.properties.status || 'OFF'}
-                            {selectedComponent.properties.lowBattWarning && (
-                                <span className="ml-2 text-[10px] text-yellow-300">LOW BATT</span>
+                             const V_bank = Number(selectedComponent.properties.batteryVoltage || 0);
+                             const totalCapacityWh = Number(selectedComponent.properties.totalCapacityWh || 0);
+                             const Ah_bank = V_bank > 1e-6 ? (totalCapacityWh / V_bank) : 0;
+                             const efficiency = Number(selectedComponent.properties.efficiency ?? 0.9);
+                             const socPct = Number(selectedComponent.properties.socPercent || 0);
+                             const P_load_W = Number(selectedComponent.properties.loadW || 0);
+                             const DoD = 0.8;
+
+                             const E_total_Wh = V_bank * Ah_bank;
+                             const E_remaining_Wh = E_total_Wh * efficiency * DoD * (socPct / 100);
+
+                             const lowBattCutoffV = Number(selectedComponent.properties.lowBattCutoffV ?? 10.8);
+                             const cutoffActive =
+                                 status === 'LOW_BATT_CUTOFF' ||
+                                 (V_bank > 0 && V_bank <= lowBattCutoffV);
+
+                             let text = '0.0 h';
+                             if (P_load_W <= 0) {
+                                 text = 'No load';
+                             } else if (!cutoffActive) {
+                                 const hours = E_remaining_Wh > 0 ? (E_remaining_Wh / P_load_W) : 0;
+                                 text = `${Math.max(0, hours).toFixed(1)} h`;
+                             } else {
+                                 text = '0.0 h';
+                             }
+
+                             const labelClass = isOffOrTripped ? 'text-gray-500' : 'text-gray-400';
+                             const valueClass = isOffOrTripped ? 'text-gray-500' : 'text-gray-200';
+
+                             return (
+                                 <>
+                                     <div className={labelClass}>Estimated Backup Time (at current load)</div>
+                                     <div className={`text-right font-mono ${valueClass}`}>{text}</div>
+                                 </>
+                             );
+                         })()}
+
+                         <div className="text-gray-400">Status</div>
+                         <div className="text-right font-mono text-gray-200">
+                             {selectedComponent.properties.status || 'OFF'}
+                             {selectedComponent.properties.lowBattWarning && (
+                                 <span className="ml-2 text-[10px] text-yellow-300">LOW BATT</span>
                             )}
                         </div>
 
