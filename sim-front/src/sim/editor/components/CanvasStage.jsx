@@ -10,17 +10,21 @@ export const CanvasStage = () => {
   const stageRef = useRef(null);
   const containerRef = useRef(null);
   const [dimensions, setDimensions] = React.useState({ width: 0, height: 0 });
-  const { 
-    components, 
-    updateComponent, 
-    selectComponent, 
-    updateStage, 
+  const {
+    components,
+    updateComponent,
+    selectComponent,
+    updateStage,
     selectedId,
     updateDraft,
     cancelWire,
     selectWire,
     addDraftWaypoint,
-    draftWire
+    draftWire,
+    saveDragStart,
+    completeDrag,
+    undo,
+    redo
   } = useEditorStore();
 
   React.useEffect(() => {
@@ -41,6 +45,20 @@ export const CanvasStage = () => {
 
   React.useEffect(() => {
     const handleKeyDown = (e) => {
+      // Undo: Ctrl+Z (but not Ctrl+Shift+Z)
+      if (e.ctrlKey && e.key === 'z' && !e.shiftKey) {
+        e.preventDefault();
+        undo();
+        return;
+      }
+
+      // Redo: Ctrl+Y or Ctrl+Shift+Z
+      if ((e.ctrlKey && e.key === 'y') || (e.ctrlKey && e.shiftKey && e.key === 'Z')) {
+        e.preventDefault();
+        redo();
+        return;
+      }
+
       if (e.key === 'Escape') {
         cancelWire();
         selectComponent(null);
@@ -53,7 +71,7 @@ export const CanvasStage = () => {
     };
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [cancelWire, selectComponent, selectWire]);
+  }, [cancelWire, selectComponent, selectWire, undo, redo]);
 
   const handleWheel = (e) => {
     e.evt.preventDefault();
@@ -162,11 +180,22 @@ export const CanvasStage = () => {
                   e.cancelBubble = true;
                   selectComponent(comp.id);
                 }}
+                onDragStart={(e) => {
+                  // Capture initial position before drag
+                  saveDragStart(comp.id);
+                }}
                 onDragEnd={(e) => {
+                  const newX = e.target.x();
+                  const newY = e.target.y();
+
+                  // Update component position
                   updateComponent(comp.id, {
-                    x: e.target.x(),
-                    y: e.target.y(),
+                    x: newX,
+                    y: newY,
                   });
+
+                  // Save to history (only if position changed)
+                  completeDrag(comp.id, newX, newY);
                 }}
               />
             );

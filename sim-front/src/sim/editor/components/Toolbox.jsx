@@ -2,12 +2,12 @@ import React, { useState, useMemo } from 'react';
 import { useEditorStore } from '../store';
 import { COMPONENT_TYPES } from '../types';
 import { PART_DEFINITIONS as PART_REGISTRY } from '../parts/partDefinitions';
-import { 
-  Zap, Gauge, MinusCircle, ArrowDownCircle, Equal, ToggleRight, 
-  ShieldAlert, ToggleLeft, Lightbulb, Box, Fan, Snowflake, Flame, 
-  Droplets, Plug, AlertTriangle, User, Grid, BatteryCharging, 
+import {
+  Zap, Gauge, MinusCircle, ArrowDownCircle, Equal, ToggleRight,
+  ShieldAlert, ToggleLeft, Lightbulb, Box, Fan, Snowflake, Flame,
+  Droplets, Plug, AlertTriangle, User, Grid, BatteryCharging,
   Shuffle, Activity, Settings, ChevronDown, ChevronRight, Trash2, TowerControl,
-  Sun, Cpu
+  Sun, Cpu, Undo, Redo
 } from 'lucide-react';
 
 // Icon Mapping
@@ -149,6 +149,10 @@ export const Toolbox = () => {
   const setMode = useEditorStore((state) => state.setMode);
   const allowedParts = useEditorStore((state) => state.allowedParts);
   const clearAll = useEditorStore((state) => state.clearAll);
+  const undo = useEditorStore((state) => state.undo);
+  const redo = useEditorStore((state) => state.redo);
+  const canUndo = useEditorStore((state) => state.canUndo);
+  const canRedo = useEditorStore((state) => state.canRedo);
 
   // Filter available types first
   const availableTypeSet = useMemo(() => {
@@ -209,6 +213,36 @@ export const Toolbox = () => {
           <Trash2 size={16} />
           Clear Canvas
         </button>
+
+        {/* Undo/Redo Buttons */}
+        <div className="mt-3 flex gap-2">
+          <button
+            onClick={undo}
+            disabled={!canUndo()}
+            className={`flex-1 flex items-center justify-center gap-2 py-2.5 rounded-lg text-sm font-medium border transition-all duration-200 ${
+              canUndo()
+                ? 'bg-gray-800 hover:bg-gray-700 text-gray-200 hover:text-white border-gray-700 hover:border-gray-600'
+                : 'bg-gray-900 text-gray-600 border-gray-800 cursor-not-allowed'
+            }`}
+            title="Undo (Ctrl+Z)"
+          >
+            <Undo size={16} />
+            Undo
+          </button>
+          <button
+            onClick={redo}
+            disabled={!canRedo()}
+            className={`flex-1 flex items-center justify-center gap-2 py-2.5 rounded-lg text-sm font-medium border transition-all duration-200 ${
+              canRedo()
+                ? 'bg-gray-800 hover:bg-gray-700 text-gray-200 hover:text-white border-gray-700 hover:border-gray-600'
+                : 'bg-gray-900 text-gray-600 border-gray-800 cursor-not-allowed'
+            }`}
+            title="Redo (Ctrl+Y)"
+          >
+            <Redo size={16} />
+            Redo
+          </button>
+        </div>
 
         <div className="mt-4 text-[10px] text-gray-500 text-center">
           <p>Pan: Right-Click or Space+Drag</p>

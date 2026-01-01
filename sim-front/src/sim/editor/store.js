@@ -21,11 +21,13 @@ const DEFAULT_SIM_STATE = {
   socketStates: {},
   protectedPhaseSet: new Set(),
   protectedNeutralSet: new Set(),
-  loadData: {}, 
-  deviceLoads: {}, 
+  loadData: {},
+  deviceLoads: {},
   phaseCurrents: { R: 0, Y: 0, B: 0 },
   totalSystemPowerW: 0,
 };
+
+const HISTORY_LIMIT = 50;
 
 export const useEditorStore = create(
   persist(
@@ -37,7 +39,14 @@ export const useEditorStore = create(
       hoveredTerminal: null,
       draftWire: null,
       simulationState: DEFAULT_SIM_STATE,
-      messages: [], 
+      messages: [],
+
+      // Undo/Redo State
+      history: {
+        past: [],
+        future: [],
+      },
+      dragStartState: null, // Store component state before drag 
       
       mainsVoltage: 230,
 
@@ -74,6 +83,127 @@ export const useEditorStore = create(
         x: 0,
         y: 0,
       },
+
+      // --- Undo/Redo Helper Functions ---
+
+      saveToHistory: () => {
+        const { components, wires, history } = get();
+
+        // Create a deep copy of current state
+        const snapshot = {
+          components: structuredClone(components),
+          wires: structuredClone(wires),
+        };
+
+        // Add to past and clear future
+        const newPast = [...history.past, snapshot];
+
+        // Limit history size
+        if (newPast.length > HISTORY_LIMIT) {
+          newPast.shift(); // Remove oldest entry
+        }
+
+        set({
+          history: {
+            past: newPast,
+            future: [], // Clear future on new action
+          },
+        });
+      },
+
+      undo: () => {
+        const { history, components, wires } = get();
+
+        if (history.past.length === 0) return;
+
+        // Get the last state from past
+        const previous = history.past[history.past.length - 1];
+        const newPast = history.past.slice(0, -1);
+
+        // Save current state to future
+        const currentSnapshot = {
+          components: structuredClone(components),
+          wires: structuredClone(wires),
+        };
+
+        set({
+          components: previous.components,
+          wires: previous.wires,
+          history: {
+            past: newPast,
+            future: [currentSnapshot, ...history.future],
+          },
+        });
+
+        // Re-evaluate simulation with restored state
+        get()._evaluate();
+      },
+
+      redo: () => {
+        const { history, components, wires } = get();
+
+        if (history.future.length === 0) return;
+
+        // Get the next state from future
+        const next = history.future[0];
+        const newFuture = history.future.slice(1);
+
+        // Save current state to past
+        const currentSnapshot = {
+          components: structuredClone(components),
+          wires: structuredClone(wires),
+        };
+
+        set({
+          components: next.components,
+          wires: next.wires,
+          history: {
+            past: [...history.past, currentSnapshot],
+            future: newFuture,
+          },
+        });
+
+        // Re-evaluate simulation with restored state
+        get()._evaluate();
+      },
+
+      canUndo: () => {
+        return get().history.past.length > 0;
+      },
+
+      canRedo: () => {
+        return get().history.future.length > 0;
+      },
+
+      saveDragStart: (componentId) => {
+        const { components } = get();
+        const component = components.find(c => c.id === componentId);
+
+        if (component) {
+          set({
+            dragStartState: {
+              id: componentId,
+              x: component.x,
+              y: component.y,
+            },
+          });
+        }
+      },
+
+      completeDrag: (componentId, newX, newY) => {
+        const { dragStartState } = get();
+
+        if (dragStartState && dragStartState.id === componentId) {
+          // Only save to history if position actually changed
+          if (dragStartState.x !== newX || dragStartState.y !== newY) {
+            get().saveToHistory();
+          }
+
+          set({ dragStartState: null });
+        }
+      },
+
+      // --- End Undo/Redo Functions ---
 
       setPQConfig: (configUpdate) => {
           set(state => {
@@ -898,6 +1028,9 @@ export const useEditorStore = create(
         const registryItem = PART_REGISTRY[type];
         if (!registryItem) return;
 
+        // Save state before adding component
+        get().saveToHistory();
+
         const newComponent = {
           id: nanoid(),
           type,
@@ -916,6 +1049,12 @@ export const useEditorStore = create(
       },
 
       updateComponent: (id, updates) => {
+        // Save history for property changes (not for position updates from drag)
+        // Position updates from drag are handled by saveDragStart/completeDrag
+        if (updates.properties) {
+          get().saveToHistory();
+        }
+
         set((state) => ({
           components: state.components.map((c) =>
             c.id === id ? { ...c, ...updates } : c
@@ -931,6 +1070,9 @@ export const useEditorStore = create(
       },
 
       removeComponent: (id) => {
+        // Save state before removing component
+        get().saveToHistory();
+
         set((state) => ({
           components: state.components.filter((c) => c.id !== id),
           selectedId: state.selectedId === id ? null : state.selectedId,
@@ -1100,6 +1242,9 @@ export const useEditorStore = create(
           return;
         }
 
+        // Save state before adding wire
+        get().saveToHistory();
+
         const newWire = {
           id: nanoid(),
           from,
@@ -1123,6 +1268,9 @@ export const useEditorStore = create(
       },
 
       deleteWire: (id) => {
+        // Save state before deleting wire
+        get().saveToHistory();
+
         set((state) => ({
           wires: state.wires.filter(w => w.id !== id),
           selectedWireId: state.selectedWireId === id ? null : state.selectedWireId,

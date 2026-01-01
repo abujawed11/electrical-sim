@@ -12,10 +12,10 @@ export const EditorShell = () => {
   const messages = useEditorStore((state) => state.messages);
   const dismissMessage = useEditorStore((state) => state.dismissMessage);
   const resetAllTrips = useEditorStore((state) => state.resetAllTrips);
-  
+
   const mainsVoltage = useEditorStore((state) => state.mainsVoltage);
   const setMainsVoltage = useEditorStore((state) => state.setMainsVoltage);
-  
+
   const simRunning = useEditorStore((state) => state.simRunning);
   const toggleSim = useEditorStore((state) => state.toggleSim);
   const timeScale = useEditorStore((state) => state.timeScale);
@@ -30,7 +30,7 @@ export const EditorShell = () => {
       <div className="flex-1 relative flex flex-col h-full overflow-hidden">
          {/* Top Right Controls Overlay */}
          <div className="absolute top-4 right-4 z-50 flex flex-col items-end gap-2 pointer-events-none">
-             
+
              {/* Power Quality Panel */}
              <PowerQualityPanel />
 
