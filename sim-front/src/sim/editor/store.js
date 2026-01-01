@@ -1194,10 +1194,11 @@ export const useEditorStore = create(
         }
 
         if (fromTerm.kind !== toTerm.kind) {
-          // Special-case: allow PV series wiring (SolarPanel POS <-> SolarPanel NEG).
+          // Special-case: allow DC series wiring (SolarPanel/Battery POS <-> NEG).
           // This is required so users can build series strings directly from wiring topology.
           if (
-              (fromComp.type === 'SOLAR_PANEL' && toComp.type === 'SOLAR_PANEL') &&
+              ((fromComp.type === 'SOLAR_PANEL' && toComp.type === 'SOLAR_PANEL') ||
+               (fromComp.type === 'BATTERY' && toComp.type === 'BATTERY')) &&
               (
                   (fromTerm.kind === 'DC_POS' && toTerm.kind === 'DC_NEG') ||
                   (fromTerm.kind === 'DC_NEG' && toTerm.kind === 'DC_POS')

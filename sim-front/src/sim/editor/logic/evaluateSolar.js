@@ -445,10 +445,20 @@ export const evaluateSolar = (components, wires, deviceLoads, dtHours, sunIntens
         return out;
     };
 
+    // Get battery strings (preserves series/parallel topology)
+    const getBatteryStringsAt = (compId, posTerminalId, negTerminalId) => {
+        return findBatteryStrings(compId, posTerminalId, negTerminalId);
+    };
+
     const connectedBatteryIdsAt = (compId, posTerminalId, negTerminalId) => {
-        const posIds = reachableIdsByType(dcPosGraph, `${compId}:${posTerminalId}`, COMPONENT_TYPES.BATTERY);
-        const negIds = reachableIdsByType(dcNegGraph, `${compId}:${negTerminalId}`, COMPONENT_TYPES.BATTERY);
-        return Array.from(intersectSets(posIds, negIds));
+        // Use new battery string discovery
+        const strings = getBatteryStringsAt(compId, posTerminalId, negTerminalId);
+
+        // Flatten all strings to get unique battery IDs
+        const allBatteryIds = new Set();
+        strings.forEach(str => str.forEach(batId => allBatteryIds.add(batId)));
+
+        return Array.from(allBatteryIds);
     };
 
     const connectedPanelIdsAt = (compId, posTerminalId, negTerminalId) => {
@@ -469,10 +479,18 @@ export const evaluateSolar = (components, wires, deviceLoads, dtHours, sunIntens
         return [...batteryIds].sort().join('|');
     };
 
-    const ensureBus = (busByKey, batteryIds) => {
+    const ensureBus = (busByKey, batteryIds, batteryStrings = []) => {
         const key = batteryKeyFor(batteryIds);
         if (!key) return null;
-        if (!busByKey.has(key)) busByKey.set(key, { key, batteryIds: [...batteryIds].sort(), mppts: [], inverters: [] });
+        if (!busByKey.has(key)) {
+            busByKey.set(key, {
+                key,
+                batteryIds: [...batteryIds].sort(),
+                batteryStrings: batteryStrings, // Preserve string topology
+                mppts: [],
+                inverters: []
+            });
+        }
         return busByKey.get(key);
     };
 
@@ -484,11 +502,138 @@ export const evaluateSolar = (components, wires, deviceLoads, dtHours, sunIntens
     // PV wiring topology graph (for series/parallel PV strings)
     const pvGraph = buildPvGraph(components, wires);
 
+    // -----------------------------
+    // Battery unified graph (for series/parallel battery strings)
+    // -----------------------------
+    const buildBatteryGraph = () => {
+        const graph = new Map();
+        const componentsById = new Map(components.map(c => [c.id, c]));
+
+        const addBatteryEdge = (a, b) => {
+            if (!graph.has(a)) graph.set(a, []);
+            if (!graph.has(b)) graph.set(b, []);
+            graph.get(a).push(b);
+            graph.get(b).push(a);
+        };
+
+        const getTerminalKind = (compId, terminalId) => {
+            const comp = componentsById.get(compId);
+            if (!comp) return null;
+            const def = PART_DEFINITIONS[comp.type];
+            const term = def?.terminals?.find(t => t.id === terminalId);
+            return term?.kind ?? null;
+        };
+
+        const isDcKind = (k) =>
+            k === TERMINAL_KINDS.DC_POS ||
+            k === TERMINAL_KINDS.DC_NEG ||
+            k === TERMINAL_KINDS.GENERIC;
+
+        // Add all DC wires (allows series topology: POS->NEG->POS)
+        wires.forEach(w => {
+            const fromKind = getTerminalKind(w.from.compId, w.from.terminalId);
+            const toKind = getTerminalKind(w.to.compId, w.to.terminalId);
+            if (!isDcKind(fromKind) || !isDcKind(toKind)) return;
+            addBatteryEdge(`${w.from.compId}:${w.from.terminalId}`, `${w.to.compId}:${w.to.terminalId}`);
+        });
+
+        // DC_MCB pass-through (only if ON)
+        components.forEach(c => {
+            if (c.type !== COMPONENT_TYPES.DC_MCB) return;
+            if (!c.properties?.isOn) return;
+            addBatteryEdge(`${c.id}:IN_POS`, `${c.id}:OUT_POS`);
+            addBatteryEdge(`${c.id}:IN_NEG`, `${c.id}:OUT_NEG`);
+        });
+
+        // Battery internal connection: NEG <-> POS (like solar panels)
+        components.forEach(c => {
+            if (c.type !== COMPONENT_TYPES.BATTERY) return;
+            addBatteryEdge(`${c.id}:NEG`, `${c.id}:POS`);
+        });
+
+        return graph;
+    };
+
+    const batteryGraph = buildBatteryGraph();
+
+    // Discover battery strings from a component's terminals
+    const findBatteryStrings = (compId, posTerminalId, negTerminalId) => {
+        const componentsById = new Map(components.map(c => [c.id, c]));
+        const start = `${compId}:${posTerminalId}`;
+        const goal = `${compId}:${negTerminalId}`;
+
+        const isBatteryTerminal = (node) => {
+            const [cId, termId] = node.split(':');
+            const comp = componentsById.get(cId);
+            if (!comp || comp.type !== COMPONENT_TYPES.BATTERY) return null;
+            if (termId !== 'POS' && termId !== 'NEG') return null;
+            return { batteryId: cId, terminalId: termId };
+        };
+
+        const strings = [];
+        const dedupe = new Set();
+        const stack = [{
+            node: start,
+            visitedNodes: new Set([start]),
+            usedBatteries: new Set(),
+            batterySeq: [],
+            visits: 0,
+        }];
+
+        const maxStrings = 64;
+        const maxNodeVisits = 4000;
+
+        while (stack.length && strings.length < maxStrings) {
+            const cur = stack.pop();
+            if (cur.visits > maxNodeVisits) break;
+
+            if (cur.node === goal) {
+                const key = cur.batterySeq.join('|');
+                if (cur.batterySeq.length > 0 && !dedupe.has(key)) {
+                    dedupe.add(key);
+                    strings.push(cur.batterySeq);
+                }
+                continue;
+            }
+
+            const neighbors = batteryGraph.get(cur.node) || [];
+            for (const next of neighbors) {
+                if (cur.visitedNodes.has(next)) continue;
+
+                const nextVisited = new Set(cur.visitedNodes);
+                nextVisited.add(next);
+
+                const nextUsedBatteries = new Set(cur.usedBatteries);
+                const nextSeq = cur.batterySeq.slice();
+
+                // If traversing internal battery edge (POS<->NEG), record battery
+                const a = isBatteryTerminal(cur.node);
+                const b = isBatteryTerminal(next);
+                if (a && b && a.batteryId === b.batteryId && a.terminalId !== b.terminalId) {
+                    if (nextUsedBatteries.has(a.batteryId)) continue;
+                    nextUsedBatteries.add(a.batteryId);
+                    nextSeq.push(a.batteryId);
+                }
+
+                stack.push({
+                    node: next,
+                    visitedNodes: nextVisited,
+                    usedBatteries: nextUsedBatteries,
+                    batterySeq: nextSeq,
+                    visits: cur.visits + 1,
+                });
+            }
+        }
+
+        return strings;
+    };
+
     // 3a) Inverter DC load demand (external battery systems)
     const solarInverters = components.filter(c => c.type === COMPONENT_TYPES.SOLAR_INVERTER);
 
     solarInverters.forEach(inv => {
         const batteryIds = connectedBatteryIdsAt(inv.id, 'BAT_POS', 'BAT_NEG');
+        const batteryStrings = getBatteryStringsAt(inv.id, 'BAT_POS', 'BAT_NEG');
         const hasBattery = batteryIds.length > 0;
 
         // Reset computed props each tick (prevents sticky flags)
@@ -525,7 +670,7 @@ export const evaluateSolar = (components, wires, deviceLoads, dtHours, sunIntens
                 status: 'OFF',
                 canInvert: false,
             });
-            ensureBus(busByKey, batteryIds)?.inverters.push({
+            ensureBus(busByKey, batteryIds, batteryStrings)?.inverters.push({
                 invId: inv.id,
                 batteryIds,
                 requestedW: 0,
@@ -541,7 +686,7 @@ export const evaluateSolar = (components, wires, deviceLoads, dtHours, sunIntens
 
         if (bypass) {
             pushUpdate(inv.id, { status: 'BYPASS', canInvert: false });
-            ensureBus(busByKey, batteryIds)?.inverters.push({
+            ensureBus(busByKey, batteryIds, batteryStrings)?.inverters.push({
                 invId: inv.id,
                 batteryIds,
                 requestedW: 0,
@@ -626,7 +771,7 @@ export const evaluateSolar = (components, wires, deviceLoads, dtHours, sunIntens
             // canInvert finalized after bus net-power solve (depends on PV + battery)
         });
 
-        ensureBus(busByKey, batteryIds)?.inverters.push({
+        ensureBus(busByKey, batteryIds, batteryStrings)?.inverters.push({
             invId: inv.id,
             batteryIds,
             requestedW,
@@ -678,6 +823,7 @@ export const evaluateSolar = (components, wires, deviceLoads, dtHours, sunIntens
         }
 
         const batteryIds = connectedBatteryIdsAt(mppt.id, 'BAT_POS', 'BAT_NEG');
+        const batteryStrings = getBatteryStringsAt(mppt.id, 'BAT_POS', 'BAT_NEG');
         if (batteryIds.length === 0) {
             pushUpdate(mppt.id, { connectedBatteries: 0, mode: 'NO_BATTERY', lastTickReason: 'NO_BATTERY' });
             return; // already reset above
@@ -718,7 +864,7 @@ export const evaluateSolar = (components, wires, deviceLoads, dtHours, sunIntens
         const pvToDcW = Math.max(0, pvAvailableW * efficiencyUsed);
         const ratingA = Number(mppt.properties.ratingA ?? 40);
 
-        const bus = ensureBus(busByKey, batteryIds);
+        const bus = ensureBus(busByKey, batteryIds, batteryStrings);
         if (bus) {
             const busKey = bus.key;
             mpptInfos.push({
@@ -761,9 +907,32 @@ export const evaluateSolar = (components, wires, deviceLoads, dtHours, sunIntens
         const totalCapAh = batStats.reduce((s, x) => s + x.capAh, 0);
         const totalSocAh = batStats.reduce((s, x) => s + x.socAh, 0);
         const avgSocPct = totalCapAh > 0 ? (totalSocAh / totalCapAh) : 1;
-        const avgBatteryV = totalCapAh > 0
-            ? (batStats.reduce((s, x) => s + x.v * x.capAh, 0) / totalCapAh)
-            : 12;
+
+        // Calculate bus voltage from battery strings (properly handles series/parallel)
+        const calculateBusVoltage = () => {
+            const batteryStrings = bus.batteryStrings || [];
+            if (batteryStrings.length === 0) {
+                // Fallback to old method if no strings info
+                return totalCapAh > 0
+                    ? (batStats.reduce((s, x) => s + x.v * x.capAh, 0) / totalCapAh)
+                    : 12;
+            }
+
+            // For each string, voltages add (series)
+            const stringVoltages = batteryStrings.map(str => {
+                return str.reduce((vSum, batId) => {
+                    const batStat = batStats.find(b => b.bid === batId);
+                    return vSum + (batStat ? batStat.v : 0);
+                }, 0);
+            });
+
+            // Multiple strings in parallel: average their voltages
+            if (stringVoltages.length === 0) return 12;
+            const avgStringV = stringVoltages.reduce((s, v) => s + v, 0) / stringVoltages.length;
+            return avgStringV;
+        };
+
+        const avgBatteryV = calculateBusVoltage();
 
         const totalCapacityWh = batStats.reduce((s, x) => s + x.capAh * x.nominalV, 0);
         const totalSocWh = batStats.reduce((s, x) => s + x.socAh * x.nominalV, 0);
