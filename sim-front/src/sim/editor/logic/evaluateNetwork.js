@@ -838,17 +838,23 @@ export const evaluateNetwork = (components, wires, pqStatus, voltageModel) => {
   components.filter(c => c.type === COMPONENT_TYPES.FEEDER_11KV && c.properties.enabled).forEach(s => {
     const feederVLL = Number(s.properties.voltage || 11000);
     const feederVLN = feederVLL / Math.sqrt(3);
-    if (statusR) {
+    
+    // Check both global grid status AND local feeder phase switches
+    const rEnabled = statusR && (s.properties.phaseR !== false);
+    const yEnabled = statusY && (s.properties.phaseY !== false);
+    const bEnabled = statusB && (s.properties.phaseB !== false);
+
+    if (rEnabled) {
       const src = `${s.id}:R`;
       hvPhaseRSources.push(src);
       hvSourceMagByNode[src] = feederVLN * (gridMultiplier.R ?? 1);
     }
-    if (statusY) {
+    if (yEnabled) {
       const src = `${s.id}:Y`;
       hvPhaseYSources.push(src);
       hvSourceMagByNode[src] = feederVLN * (gridMultiplier.Y ?? 1);
     }
-    if (statusB) {
+    if (bEnabled) {
       const src = `${s.id}:B`;
       hvPhaseBSources.push(src);
       hvSourceMagByNode[src] = feederVLN * (gridMultiplier.B ?? 1);

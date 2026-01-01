@@ -329,6 +329,9 @@ export const PART_DEFINITIONS = {
       label: '11kV SOURCE',
       enabled: true,
       voltage: 11000,
+      phaseR: true,
+      phaseY: true,
+      phaseB: true,
     },
     terminals: [
       { id: 'R', kind: TERMINAL_KINDS.HV_PHASE_R, relX: -30, relY: 30, label: 'R (11kV)' },

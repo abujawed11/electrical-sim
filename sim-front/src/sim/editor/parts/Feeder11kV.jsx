@@ -8,9 +8,21 @@ export const Feeder11kV = ({ id, type, x, y, isSelected, properties, onSelect, o
   const registryItem = PART_REGISTRY[type];
   const hoveredTerminal = useEditorStore((state) => state.hoveredTerminal);
   const setHoveredTerminal = useEditorStore((state) => state.setHoveredTerminal);
+  const updateComponent = useEditorStore((state) => state.updateComponent);
   const simulationState = useEditorStore((state) => state.simulationState);
 
   const { label } = properties;
+
+  const togglePhase = (phase) => {
+    const propKey = `phase${phase}`; // phaseR, phaseY, phaseB
+    const currentVal = properties[propKey];
+    // Default is true if undefined. So if undefined or true -> set false. If false -> set true.
+    const newVal = currentVal === false; 
+    
+    updateComponent(id, {
+      properties: { ...properties, [propKey]: newVal }
+    });
+  };
 
   return (
     <Group id={id} x={x} y={y} draggable onClick={onSelect} onTap={onSelect} onDragEnd={onDragEnd}>
@@ -75,11 +87,51 @@ export const Feeder11kV = ({ id, type, x, y, isSelected, properties, onSelect, o
         align="center"
       />
 
+      {/* Phase Control Switches */}
+      <Group y={16}>
+        {/* R Phase Button */}
+        <Group 
+            x={-30} 
+            onClick={(e) => { e.cancelBubble = true; togglePhase('R'); }}
+            onMouseEnter={() => document.body.style.cursor = 'pointer'}
+            onMouseLeave={() => document.body.style.cursor = 'default'}
+        >
+            <Circle radius={5} fill={properties.phaseR !== false ? '#EF4444' : '#374151'} stroke="black" strokeWidth={1} />
+            <Text text="R" fontSize={6} fill="white" x={-2} y={-3} />
+        </Group>
+
+        {/* Y Phase Button */}
+        <Group 
+            x={-10} 
+            onClick={(e) => { e.cancelBubble = true; togglePhase('Y'); }}
+            onMouseEnter={() => document.body.style.cursor = 'pointer'}
+            onMouseLeave={() => document.body.style.cursor = 'default'}
+        >
+            <Circle radius={5} fill={properties.phaseY !== false ? '#F59E0B' : '#374151'} stroke="black" strokeWidth={1} />
+            <Text text="Y" fontSize={6} fill="black" x={-2} y={-3} />
+        </Group>
+
+        {/* B Phase Button */}
+        <Group 
+            x={10} 
+            onClick={(e) => { e.cancelBubble = true; togglePhase('B'); }}
+            onMouseEnter={() => document.body.style.cursor = 'pointer'}
+            onMouseLeave={() => document.body.style.cursor = 'default'}
+        >
+            <Circle radius={5} fill={properties.phaseB !== false ? '#3B82F6' : '#374151'} stroke="black" strokeWidth={1} />
+            <Text text="B" fontSize={6} fill="white" x={-2} y={-3} />
+        </Group>
+      </Group>
+
       {/* Terminals */}
       {registryItem.terminals.map((t) => {
         const terminalIdStr = `${id}:${t.id}`;
         // For Feeder, terminals are sources, always energized if enabled
-        const isEnergized = properties.enabled; 
+        // Check specific phase for R, Y, B terminals
+        let isEnergized = properties.enabled;
+        if (t.id === 'R') isEnergized = isEnergized && (properties.phaseR !== false);
+        if (t.id === 'Y') isEnergized = isEnergized && (properties.phaseY !== false);
+        if (t.id === 'B') isEnergized = isEnergized && (properties.phaseB !== false);
 
         return (
           <Terminal
