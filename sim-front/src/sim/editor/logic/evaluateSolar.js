@@ -1119,6 +1119,8 @@ export const evaluateSolar = (components, wires, deviceLoads, dtHours, sunIntens
                 socPercent: Math.max(0, Math.min(100, avgSocPct * 100)),
                 batteryVoltage: avgBatteryV,
                 totalCapacityWh,
+                // Signed net battery power on this DC bus: +ve = charging, -ve = discharging
+                netBatteryW,
                 // Simple indicator: battery is charging on this bus (net power into battery)
                 isCharging: netBatteryW > 1 && avgSocPct < 0.999,
                 lowBattWarning: Boolean(decision.lowBattWarning),

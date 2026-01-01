@@ -675,6 +675,22 @@ export const PropertiesPanel = () => {
                                  <>
                                      <div className={labelClass}>Estimated Backup Time (at current load)</div>
                                      <div className={`text-right font-mono ${valueClass}`}>{text}</div>
+
+                                     <div className={labelClass}>Estimated Time to Full Charge</div>
+                                     <div className={`text-right font-mono ${valueClass}`}>
+                                         {(() => {
+                                             const totalCapacityWh = Number(selectedComponent.properties.totalCapacityWh || 0);
+                                             const socPct = Number(selectedComponent.properties.socPercent || 0);
+                                             const netBatteryW = Number(selectedComponent.properties.netBatteryW || 0);
+
+                                             if (socPct >= 99.9) return 'Full';
+                                             if (netBatteryW <= 0) return 'Not charging';
+
+                                             const neededWh = totalCapacityWh * (1 - socPct / 100);
+                                             const hours = neededWh > 0 ? (neededWh / netBatteryW) : 0;
+                                             return `${Math.max(0, hours).toFixed(1)} h`;
+                                         })()}
+                                     </div>
                                  </>
                              );
                          })()}
