@@ -770,6 +770,15 @@ export const evaluateNetwork = (components, wires, pqStatus, voltageModel) => {
         addEdge(conductorGraph, `${comp.id}:B_L`, `${comp.id}:OUT_L`);
         addEdge(neutralGraph, `${comp.id}:B_N`, `${comp.id}:OUT_N`);
       }
+    } else if (comp.type === COMPONENT_TYPES.ATS) {
+      // Break-before-make: transfer states do not connect anything.
+      if (comp.properties.state === 'GRID_ACTIVE') {
+        addEdge(conductorGraph, `${comp.id}:GRID_L`, `${comp.id}:OUT_L`);
+        addEdge(neutralGraph, `${comp.id}:GRID_N`, `${comp.id}:OUT_N`);
+      } else if (comp.properties.state === 'INVERTER_ACTIVE') {
+        addEdge(conductorGraph, `${comp.id}:INV_L`, `${comp.id}:OUT_L`);
+        addEdge(neutralGraph, `${comp.id}:INV_N`, `${comp.id}:OUT_N`);
+      }
     } else if (comp.type === COMPONENT_TYPES.INVERTER) {
       if (comp.properties.isBypassMode) {
         addEdge(conductorGraph, `${comp.id}:AC_IN_L`, `${comp.id}:AC_OUT_L`);

@@ -884,7 +884,7 @@ export const PropertiesPanel = () => {
         )}
 
         {selectedComponent.type === COMPONENT_TYPES.CHANGEOVER && (
-            <div className="space-y-3">
+             <div className="space-y-3">
                 <div className="flex items-center justify-between p-2 bg-gray-700 rounded">
                   <span className="text-gray-200 text-sm">Operation Mode</span>
                   <button
@@ -946,6 +946,104 @@ export const PropertiesPanel = () => {
                         </div>
                     </div>
                 )}
+             </div>
+         )}
+
+        {selectedComponent.type === COMPONENT_TYPES.ATS && (
+            <div className="space-y-3">
+                <div className="p-2 bg-gray-900 rounded border border-gray-700">
+                    <div className="flex justify-between items-center">
+                        <span className="text-gray-400 text-xs">State</span>
+                        <span className="text-gray-200 text-xs font-mono">{selectedComponent.properties.state || 'NO_SUPPLY'}</span>
+                    </div>
+                    <div className="flex justify-between items-center mt-1">
+                        <span className="text-gray-400 text-xs">Active Source</span>
+                        <span className="text-gray-200 text-xs font-mono">{selectedComponent.properties.activeSource || 'NONE'}</span>
+                    </div>
+                </div>
+
+                <div className="space-y-1">
+                    <label className="text-xs text-gray-400 block">Mode</label>
+                    <select
+                        value={selectedComponent.properties.overrideMode || 'AUTO'}
+                        onChange={(e) => handlePropChange('overrideMode', e.target.value)}
+                        className="w-full bg-gray-900 border border-gray-600 rounded px-2 py-1 text-white"
+                    >
+                        <option value="AUTO">AUTO</option>
+                        <option value="GRID">GRID</option>
+                        <option value="INVERTER">INVERTER</option>
+                        <option value="OFF">OFF</option>
+                    </select>
+                    <p className="text-[10px] text-gray-500 italic">AUTO selects GRID when available, otherwise INVERTER</p>
+                </div>
+
+                <div className="space-y-1">
+                    <label className="text-xs text-gray-400 block">Grid Low-Voltage Threshold (V)</label>
+                    <input
+                        type="number"
+                        min="0"
+                        step="5"
+                        value={selectedComponent.properties.gridThresholdV ?? 180}
+                        onChange={(e) => handlePropChange('gridThresholdV', parseFloat(e.target.value))}
+                        className="w-full bg-gray-900 border border-gray-600 rounded px-2 py-1 text-white"
+                    />
+                </div>
+
+                <div className="space-y-1">
+                    <label className="text-xs text-gray-400 block">Switching Delay (ms)</label>
+                    <input
+                        type="number"
+                        min="200"
+                        max="2000"
+                        step="50"
+                        value={selectedComponent.properties.switchingDelayMs ?? 300}
+                        onChange={(e) => handlePropChange('switchingDelayMs', parseFloat(e.target.value))}
+                        className="w-full bg-gray-900 border border-gray-600 rounded px-2 py-1 text-white"
+                    />
+                    <p className="text-[10px] text-gray-500 italic">Break-before-make delay</p>
+                </div>
+
+                <div className="space-y-1">
+                    <label className="text-xs text-gray-400 block">Minimum Battery SOC (%)</label>
+                    <input
+                        type="number"
+                        min="0"
+                        max="100"
+                        step="1"
+                        value={selectedComponent.properties.minimumSocPct ?? 20}
+                        onChange={(e) => handlePropChange('minimumSocPct', parseFloat(e.target.value))}
+                        className="w-full bg-gray-900 border border-gray-600 rounded px-2 py-1 text-white"
+                    />
+                </div>
+
+                <div className="space-y-1">
+                    <label className="text-xs text-gray-400 block">Linked Inverter (optional)</label>
+                    <select
+                        value={selectedComponent.properties.linkedInverterId || ''}
+                        onChange={(e) => handlePropChange('linkedInverterId', e.target.value || null)}
+                        className="w-full bg-gray-900 border border-gray-600 rounded px-2 py-1 text-white"
+                    >
+                        <option value="">AUTO-DETECT</option>
+                        {components
+                            .filter((c) => c.type === COMPONENT_TYPES.INVERTER || c.type === COMPONENT_TYPES.SOLAR_INVERTER)
+                            .map((inv) => (
+                                <option key={inv.id} value={inv.id}>
+                                    {inv.properties?.label || inv.type} ({inv.id.slice(0, 6)})
+                                </option>
+                            ))}
+                    </select>
+                    <p className="text-[10px] text-gray-500 italic">Used for SOC/overload/trip readiness checks</p>
+                </div>
+
+                <div className="flex items-center space-x-2">
+                    <input
+                        type="checkbox"
+                        checked={selectedComponent.properties.relayClickOnTransfer || false}
+                        onChange={(e) => handlePropChange('relayClickOnTransfer', e.target.checked)}
+                        className="rounded bg-gray-700 border-gray-600"
+                    />
+                    <label className="text-xs text-gray-300">Relay click trigger (hook)</label>
+                </div>
             </div>
         )}
 

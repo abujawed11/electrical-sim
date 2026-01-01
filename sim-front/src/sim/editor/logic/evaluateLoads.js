@@ -150,6 +150,14 @@ export const evaluateLoads = (components, wires, simulationState, voltages) => {
              addInternal(phaseGraph, c.id, 'B_L', 'OUT_L');
           }
       }
+      else if (c.type === COMPONENT_TYPES.ATS) {
+          // Break-before-make: only connect one source when active; transfer/NO_SUPPLY connects nothing.
+          if (c.properties.state === 'GRID_ACTIVE') {
+              addInternal(phaseGraph, c.id, 'GRID_L', 'OUT_L');
+          } else if (c.properties.state === 'INVERTER_ACTIVE') {
+              addInternal(phaseGraph, c.id, 'INV_L', 'OUT_L');
+          }
+      }
       else if (c.type === COMPONENT_TYPES.MCB_3P && isClosed) {
           addInternal(phaseGraph, c.id, 'OUT_R', 'IN_R');
           addInternal(phaseGraph, c.id, 'OUT_Y', 'IN_Y');

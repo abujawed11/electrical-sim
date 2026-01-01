@@ -6,6 +6,7 @@ import { evaluateNetwork } from './logic/evaluateNetwork';
 import { evaluateFaults } from './logic/evaluateFaults';
 import { evaluateLoads } from './logic/evaluateLoads';
 import { evaluateAutoChangeover } from './logic/evaluateAutoChangeover';
+import { evaluateATS } from './logic/evaluateATS';
 import { evaluateSolar } from './logic/evaluateSolar';
 import { validateLesson, getLesson, ALL_LESSONS } from './lessons/lessonEngine';
 import { DEFAULT_PQ_CONFIG, DEFAULT_PQ_STATE, updatePowerQuality } from './logic/PowerQualityEngine';
@@ -639,24 +640,46 @@ export const useEditorStore = create(
              
              // 2. Auto Changeover Timer Logic (Completion only)
              if (c.type === 'CHANGEOVER' && c.properties.mode === 'AUTO' && c.properties.position === 'OFF' && c.properties.targetPosition) {
-                  const elapsed = now - (c.properties.transferStartTime || 0);
-                  if (elapsed >= (c.properties.transferDelay || 0)) {
-                      componentsChanged = true;
-                      needReeval = true; // Circuit re-connects
-                      return { 
-                          ...c, 
-                          properties: { 
-                              ...c.properties, 
-                              position: c.properties.targetPosition, 
-                              targetPosition: null, 
-                              transferStartTime: 0 
-                          } 
-                      };
-                  }
+                   const elapsed = now - (c.properties.transferStartTime || 0);
+                   if (elapsed >= (c.properties.transferDelay || 0)) {
+                       componentsChanged = true;
+                       needReeval = true; // Circuit re-connects
+                       return { 
+                           ...c, 
+                           properties: { 
+                               ...c.properties, 
+                               position: c.properties.targetPosition, 
+                               targetPosition: null, 
+                               transferStartTime: 0 
+                           } 
+                       };
+                   }
              }
 
-             return c;
-          });
+              // 3. ATS Timer Logic (Completion only)
+              if (
+                  c.type === 'ATS' &&
+                  (c.properties.state === 'TRANSFER_TO_INVERTER' || c.properties.state === 'TRANSFER_TO_GRID') &&
+                  c.properties.targetState
+              ) {
+                  const elapsed = now - (c.properties.transferStartTime || 0);
+                  if (elapsed >= (c.properties.transferDelayMs || 0)) {
+                      componentsChanged = true;
+                      needReeval = true;
+                      return {
+                          ...c,
+                          properties: {
+                              ...c.properties,
+                              state: c.properties.targetState,
+                              targetState: null,
+                              transferStartTime: 0,
+                          },
+                      };
+                  }
+              }
+
+              return c;
+           });
 
           // Per-meter energy accumulation (kWh) based on deviceLoads attribution from evaluateLoads.
           const { energyKWh, energy3PhaseKWh, energyByMeterKWh, energyBy3PMeterKWh } = get();
@@ -755,23 +778,36 @@ export const useEditorStore = create(
             networkChanged = true;
         }
 
-        // 4. Check Auto Changeover Updates (Instant status update)
-        const autoUpdates = evaluateAutoChangeover(components, simState);
-        if (autoUpdates.length > 0) {
-            components = components.map(c => {
-                const update = autoUpdates.find(u => u.id === c.id);
-                if (update) {
-                    return { ...c, properties: { ...c.properties, ...update.updates } };
-                }
-                return c;
-            });
-            networkChanged = true;
-        }
+         // 4. Check Auto Changeover Updates (Instant status update)
+         const autoUpdates = evaluateAutoChangeover(components, simState);
+         if (autoUpdates.length > 0) {
+             components = components.map(c => {
+                 const update = autoUpdates.find(u => u.id === c.id);
+                 if (update) {
+                     return { ...c, properties: { ...c.properties, ...update.updates } };
+                 }
+                 return c;
+             });
+             networkChanged = true;
+         }
 
-         if (networkChanged) {
-             set({ components }); // Update store with tripped/auto-updated components
-             
-             // Re-evaluate network since topology/properties changed
+         // 5. ATS Updates (state machine)
+         const atsUpdates = evaluateATS(components, wires, simState);
+         if (atsUpdates.length > 0) {
+             components = components.map(c => {
+                 const update = atsUpdates.find(u => u.id === c.id);
+                 if (update) {
+                     return { ...c, properties: { ...c.properties, ...update.updates } };
+                 }
+                 return c;
+             });
+             networkChanged = true;
+         }
+
+          if (networkChanged) {
+              set({ components }); // Update store with tripped/auto-updated components
+              
+              // Re-evaluate network since topology/properties changed
              simState = evaluateNetwork(components, wires, phaseStatus, { lvBaseVoltageLN, gridMultiplier });
              const loadRes2 = evaluateLoads(components, wires, simState, { terminalVoltageLN: simState.terminalVoltageLN, legacyVoltages: actualVoltages });
              simState.loadData = loadRes2.loadData;

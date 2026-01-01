@@ -323,6 +323,44 @@ export const PART_DEFINITIONS = {
       { id: 'OUT_N', kind: TERMINAL_KINDS.NEUTRAL, relX: 15, relY: 30, label: 'N' },
     ],
   },
+  [COMPONENT_TYPES.ATS]: {
+    name: 'Automatic Transfer Switch (ATS)',
+    defaultProperties: {
+      label: 'ATS-1',
+
+      // State machine
+      state: 'NO_SUPPLY', // GRID_ACTIVE, TRANSFER_TO_INVERTER, INVERTER_ACTIVE, TRANSFER_TO_GRID, NO_SUPPLY
+      targetState: null,
+      transferStartTime: 0,
+      transferDelayMs: 300,
+
+      // Controls / config
+      overrideMode: 'AUTO', // AUTO | GRID | INVERTER | OFF
+      gridThresholdV: 180,
+      switchingDelayMs: 300, // 200ms – 2s (clamped by logic)
+      minimumSocPct: 20,
+      linkedInverterId: null, // optional explicit inverter binding
+
+      // UI / telemetry
+      statusText: 'NO SUPPLY',
+      activeSource: 'NONE', // GRID | INVERTER | NONE
+
+      // Optional UX hook (no audio engine wired yet)
+      relayClickOnTransfer: false,
+      relayClickSeq: 0,
+    },
+    terminals: [
+      // Inputs
+      { id: 'GRID_L', kind: TERMINAL_KINDS.PHASE, relX: -35, relY: -40, label: 'G-L' },
+      { id: 'GRID_N', kind: TERMINAL_KINDS.NEUTRAL, relX: -20, relY: -40, label: 'G-N' },
+      { id: 'INV_L', kind: TERMINAL_KINDS.PHASE, relX: 20, relY: -40, label: 'I-L' },
+      { id: 'INV_N', kind: TERMINAL_KINDS.NEUTRAL, relX: 35, relY: -40, label: 'I-N' },
+
+      // Output (to Home / Load DB)
+      { id: 'OUT_L', kind: TERMINAL_KINDS.PHASE, relX: -10, relY: 45, label: 'O-L' },
+      { id: 'OUT_N', kind: TERMINAL_KINDS.NEUTRAL, relX: 10, relY: 45, label: 'O-N' },
+    ],
+  },
   [COMPONENT_TYPES.FEEDER_11KV]: {
     name: '11 kV Feeder (Substation)',
     defaultProperties: {
